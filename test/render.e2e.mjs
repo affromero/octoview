@@ -34,8 +34,10 @@ const server = http.createServer(async (req, res) => {
 });
 await new Promise((r) => server.listen(0, r));
 const base = `http://localhost:${server.address().port}`;
-// Mirror manifest.json's extension_pages CSP (connect-src points at the test server).
-const CSP = `script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; connect-src 'self' ${base}; frame-src 'self'`;
+// Mirror manifest.json's CSPs faithfully, applied as real response headers so the
+// sandbox page is exercised under its actual policy (the white-page bug hid here).
+const EXT_CSP = `script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; connect-src 'self' ${base}; frame-src 'self'`;
+const SANDBOX_CSP = `sandbox allow-scripts allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https: blob: data:; style-src 'unsafe-inline' https: data:; img-src * data: blob:; connect-src *`;
 
 const CASES = [
   { sample: 'samples/report.html', name: 'report.html', ok: (r) => r.frameCanvas },
@@ -67,11 +69,19 @@ for (const [label, engine] of [
     page.on('pageerror', (e) => errors.push(e.message));
     await page.route('**/viewer.html', async (route) => {
       const rr = await route.fetch();
-      const b = (await rr.text()).replace(
-        '<head>',
-        `<head>\n<meta http-equiv="Content-Security-Policy" content="${CSP}">`
-      );
-      await route.fulfill({ body: b, contentType: 'text/html' });
+      await route.fulfill({
+        body: await rr.text(),
+        contentType: 'text/html',
+        headers: { 'content-security-policy': EXT_CSP },
+      });
+    });
+    await page.route('**/sandbox/report.html', async (route) => {
+      const rr = await route.fetch();
+      await route.fulfill({
+        body: await rr.text(),
+        contentType: 'text/html',
+        headers: { 'content-security-policy': SANDBOX_CSP },
+      });
     });
     const url = `${base}/extension/viewer.html#src=${encodeURIComponent(`${base}/${c.sample}`)}&name=${c.name}`;
     await page.goto(url, { waitUntil: 'load' });
