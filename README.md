@@ -37,16 +37,16 @@ renders it in place. No service, no upload, no personal access token.
 Everything runs through one small, unit-tested core that dispatches by file extension. Each row is a
 renderer. Status is **verified in WebKit (Safari's engine) by an automated render test**.
 
-| Type                           | Extensions                               | Renderer                                     | Status |
-| ------------------------------ | ---------------------------------------- | -------------------------------------------- | :----: |
-| **HTML reports / plots**       | `.html` `.htm`                           | manifest sandbox page (inline scripts run)   |   ✅   |
-| **Jupyter notebooks**          | `.ipynb`                                 | keeps the interactive outputs GitHub strips  |   ✅   |
-| **3D meshes and point clouds** | `.glb` `.obj` `.ply` `.pcd`              | three.js loaders (parsed on the main thread) |   ✅   |
-| **Gaussian splats**            | `.spz` `.splat` `.splattie`              | splat renderer (WebKit data layer)           |   🚧   |
-| **Model graphs**               | `.onnx` `.tflite` `.gguf` `.safetensors` | Netron plus a tensor and metadata table      |   🚧   |
-| **Tabular data**               | `.parquet` `.arrow` `.feather`           | hyparquet                                    |   🚧   |
-| **Array previews**             | `.npy` `.npz`                            | header parse to a heatmap or image thumbnail |   🚧   |
-| **Scientific images**          | `.exr` `.hdr` `.tiff` `16-bit .png`      | tone map to a canvas                         |   🚧   |
+| Type                           | Extensions                                                                                              | Renderer                                                       | Status |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | :----: |
+| **HTML reports / plots**       | `.html` `.htm`                                                                                          | manifest sandbox page (inline scripts run)                     |   ✅   |
+| **Jupyter notebooks**          | `.ipynb`                                                                                                | keeps the interactive outputs GitHub strips                    |   ✅   |
+| **3D meshes and point clouds** | `.glb` `.obj` `.ply` `.pcd`                                                                             | three.js loaders (parsed on the main thread)                   |   ✅   |
+| **Gaussian splats**            | `.spz` `.splat` `.ksplat` `.sog` `.pcsogs` `.rad` `.lcc` `.lcc2` `.splattie` (and splat-encoded `.ply`) | splat renderer, Spark formats plus LCC/RAD (WebKit data layer) |   🚧   |
+| **Model graphs**               | `.onnx` `.tflite` `.gguf` `.safetensors`                                                                | Netron plus a tensor and metadata table                        |   🚧   |
+| **Tabular data**               | `.parquet` `.arrow` `.feather`                                                                          | hyparquet                                                      |   🚧   |
+| **Array previews**             | `.npy` `.npz`                                                                                           | header parse to a heatmap or image thumbnail                   |   🚧   |
+| **Scientific images**          | `.exr` `.hdr` `.tiff` `16-bit .png`                                                                     | tone map to a canvas                                           |   🚧   |
 
 > **On WebKit.** Safari cannot fetch a main-thread `blob:` URL from inside a worker, so renderers
 > parse the file bytes on the main thread (three.js loaders, pure-JS parsers) or fetch a real
