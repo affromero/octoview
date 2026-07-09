@@ -64,6 +64,11 @@ const CASES = [
     sample: 'samples/array.npz',
     ok: (r) => r.mainCanvas && /field|signal/.test(r.text),
   },
+  {
+    name: 'metrics.parquet',
+    sample: 'samples/metrics.parquet',
+    ok: (r) => /500 rows × 5 cols/.test(r.text) && /accuracy/.test(r.text),
+  },
 ];
 
 let failed = 0;
