@@ -55,11 +55,30 @@ function addButton() {
   btn.textContent = 'Preview';
   btn.addEventListener('click', () => onPreview(btn));
 
-  const rawAnchor = [...document.querySelectorAll('a[href*="/raw/"]')].find((a) =>
+  // Place it as the leftmost item of GitHub's file-view segmented control
+  // (Code | Blame, or Preview | Code | Blame for notebooks), so ours sits left of
+  // Code and left of GitHub's own Preview when present.
+  const blame = [...document.querySelectorAll('a[href*="/blame/"]')].find((a) =>
     a.href.startsWith('https://github.com/')
   );
-  if (rawAnchor && rawAnchor.parentElement) {
-    rawAnchor.parentElement.appendChild(btn);
+  const seg = blame && (blame.closest('ul, nav, [role="tablist"]') || blame.parentElement);
+  if (seg) {
+    if (seg.tagName === 'UL') {
+      const li = document.createElement('li');
+      li.appendChild(btn);
+      seg.insertBefore(li, seg.firstElementChild);
+    } else {
+      seg.insertBefore(btn, seg.firstElementChild);
+    }
+    return;
+  }
+
+  // Fallback: next to Raw, else fixed in a corner.
+  const raw = [...document.querySelectorAll('a[href*="/raw/"]')].find((a) =>
+    a.href.startsWith('https://github.com/')
+  );
+  if (raw && raw.parentElement) {
+    raw.parentElement.appendChild(btn);
   } else {
     btn.style.cssText = 'position:fixed;top:70px;right:20px;z-index:99999';
     document.body.appendChild(btn);

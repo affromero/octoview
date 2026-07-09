@@ -9,13 +9,23 @@
         height: 100%;
         background: #fff;
       }
+      #ovd {
+        padding: 22px;
+        font: 13px/1.5 -apple-system, BlinkMacSystemFont, sans-serif;
+        color: #57606a;
+      }
     </style>
   </head>
   <body>
-    <!-- Manifest-declared sandbox page: its CSP allows a report's own inline
-         scripts to run. It has no extension-API access. The viewer posts the
-         report HTML in; we write it here, where its scripts run. -->
+    <!-- Manifest-declared sandbox page. Its CSP allows a report's own inline
+         scripts. The static text below tells us how far it got if something
+         fails: a blank box means the page did not load; "waiting" means the
+         script ran but no HTML arrived. document.write replaces all of this on
+         success. -->
+    <div id="ovd">Loading report&hellip;</div>
     <script>
+      var d = document.getElementById('ovd');
+      if (d) d.textContent = 'Sandbox ready, waiting for the report HTML…';
       window.addEventListener('message', function (e) {
         var html = e.data && e.data.octoviewHtml;
         if (typeof html !== 'string') return;
@@ -24,8 +34,7 @@
         document.close();
       });
       // Echo the nonce the viewer put in our hash so it can match us.
-      if (window.parent)
-        window.parent.postMessage({ octoviewReady: location.hash.slice(1) || true }, '*');
+      if (window.parent) window.parent.postMessage({ octoviewReady: location.hash.slice(1) || true }, '*');
     </script>
   </body>
 </html>
