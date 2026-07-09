@@ -45,6 +45,9 @@ const CASES = [
     name: 'notebook.ipynb',
     ok: (r) => /Notebook sample/.test(r.text),
   },
+  { sample: 'samples/cube.obj', name: 'cube.obj', ok: (r) => r.mainCanvas },
+  { sample: 'samples/points.ply', name: 'points.ply', ok: (r) => r.mainCanvas },
+  { sample: 'samples/cloud.pcd', name: 'cloud.pcd', ok: (r) => r.mainCanvas },
 ];
 
 let failed = 0;
@@ -73,7 +76,10 @@ for (const [label, engine] of [
     const url = `${base}/extension/viewer.html#src=${encodeURIComponent(`${base}/${c.sample}`)}&name=${c.name}`;
     await page.goto(url, { waitUntil: 'load' });
     await page.waitForTimeout(3000);
-    const text = await page.evaluate(() => document.body.textContent);
+    const { text, mainCanvas } = await page.evaluate(() => ({
+      text: document.body.textContent,
+      mainCanvas: !!document.querySelector('canvas'),
+    }));
     let frameCanvas = false;
     for (const fr of page.frames()) {
       if (fr === page.mainFrame()) continue;
@@ -84,7 +90,7 @@ for (const [label, engine] of [
       }
     }
     const cspErr = errors.some((e) => /csp|refused|policy/i.test(e));
-    const pass = c.ok({ text, frameCanvas }) && !cspErr;
+    const pass = c.ok({ text, frameCanvas, mainCanvas }) && !cspErr;
     console.log(
       `${pass ? '✓' : '✗'} [${label}] ${c.name}${errors.length ? '  ' + errors.slice(0, 2).join(' | ') : ''}`
     );
