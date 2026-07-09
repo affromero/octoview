@@ -1,0 +1,9 @@
+# xcrun safari-web-extension-converter output — regenerated, never committed
+Safari/
+
+# macOS / Xcode
+.DS_Store
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
