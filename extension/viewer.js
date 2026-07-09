@@ -22,11 +22,15 @@ function msg(text) {
 // only extension context allowed to run arbitrary inline report scripts. Same-tab
 // parent↔child postMessage is reliable (unlike the cross-tab/process case).
 function sandboxFrame(html) {
+  // Tag the frame with a nonce (via the hash) and match the ready ping on it,
+  // rather than on e.source === f.contentWindow, which can fail for a sandbox
+  // page's opaque-origin window in Safari (and disambiguates multiple frames).
+  const id = 'ov' + Math.random().toString(36).slice(2);
   const f = document.createElement('iframe');
   f.className = 'ov-nb-out';
-  f.src = 'sandbox/report.html';
+  f.src = 'sandbox/report.html#' + id;
   const onReady = (e) => {
-    if (e.source === f.contentWindow && e.data && e.data.octoviewReady) {
+    if (e.data && e.data.octoviewReady === id) {
       f.contentWindow.postMessage({ octoviewHtml: html }, '*');
       window.removeEventListener('message', onReady);
     }

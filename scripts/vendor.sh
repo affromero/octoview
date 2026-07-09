@@ -22,7 +22,8 @@ import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js';
 import { PCDLoader } from 'three/examples/jsm/loaders/PCDLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-window.OV3D = { THREE, GLTFLoader, OBJLoader, PLYLoader, PCDLoader, OrbitControls };
+import { ViewHelper } from 'three/examples/jsm/helpers/ViewHelper.js';
+window.OV3D = { THREE, GLTFLoader, OBJLoader, PLYLoader, PCDLoader, OrbitControls, ViewHelper };
 JS
 npx esbuild build/three3d.entry.mjs --bundle --format=iife --minify \
   --outfile=extension/vendor/three3d.js

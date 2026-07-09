@@ -12,9 +12,9 @@
     </style>
   </head>
   <body>
-    <!-- This is a manifest-declared sandbox page: its CSP allows 'unsafe-inline',
-         so a report's own inline scripts run here. It has no extension-API access.
-         The viewer posts the report HTML in; we write it into this document. -->
+    <!-- Manifest-declared sandbox page: its CSP allows a report's own inline
+         scripts to run. It has no extension-API access. The viewer posts the
+         report HTML in; we write it here, where its scripts run. -->
     <script>
       window.addEventListener('message', function (e) {
         var html = e.data && e.data.octoviewHtml;
@@ -23,8 +23,9 @@
         document.write(html);
         document.close();
       });
-      // Tell the viewer (our parent) we're ready to receive the report HTML.
-      if (window.parent) window.parent.postMessage({ octoviewReady: true }, '*');
+      // Echo the nonce the viewer put in our hash so it can match us.
+      if (window.parent)
+        window.parent.postMessage({ octoviewReady: location.hash.slice(1) || true }, '*');
     </script>
   </body>
 </html>
