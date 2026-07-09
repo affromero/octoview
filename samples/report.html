@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>octoview sample · interactive HTML report</title>
+    <style>
+      body {
+        margin: 0;
+        font: 15px/1.5 -apple-system, BlinkMacSystemFont, sans-serif;
+        color: #1f2328;
+        padding: 32px;
+      }
+      h1 {
+        margin: 0 0 4px;
+      }
+      canvas {
+        border: 1px solid #d1d9e0;
+        border-radius: 8px;
+        margin-top: 16px;
+      }
+      #time {
+        font-variant-numeric: tabular-nums;
+        color: #0969da;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Interactive HTML report</h1>
+    <p>
+      GitHub shows this file's raw source. octoview renders it — and its inline script runs, so this
+      is <b>live</b>: <span id="time"></span>
+    </p>
+    <canvas id="c" width="480" height="160"></canvas>
+    <script>
+      // Proof the sandbox executes scripts: an animated sine wave + a live clock.
+      const c = document.getElementById('c').getContext('2d');
+      const t = document.getElementById('time');
+      let f = 0;
+      setInterval(() => {
+        t.textContent = new Date().toLocaleTimeString();
+        c.clearRect(0, 0, 480, 160);
+        c.strokeStyle = '#2ea043';
+        c.lineWidth = 2;
+        c.beginPath();
+        for (let x = 0; x < 480; x++) {
+          const y = 80 + 60 * Math.sin(x / 30 + f);
+          x ? c.lineTo(x, y) : c.moveTo(x, y);
+        }
+        c.stroke();
+        f += 0.08;
+      }, 50);
+    </script>
+  </body>
+</html>
