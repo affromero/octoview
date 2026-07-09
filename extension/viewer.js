@@ -35,6 +35,23 @@ function sandboxFrame(html) {
   return f;
 }
 
+// Lazy-load a script once (three.js is ~800KB — only pulled for 3D files).
+const scripts = {};
+function loadScript(url) {
+  if (!scripts[url]) {
+    scripts[url] = new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = url;
+      s.onload = res;
+      s.onerror = () => rej(new Error('failed to load ' + url));
+      document.head.appendChild(s);
+    });
+  }
+  return scripts[url];
+}
+
+const THREE_EXTS = ['.glb', '.gltf', '.obj', '.ply', '.pcd'];
+
 (async () => {
   if (!src) return msg('No source in the URL.');
   msg('Loading ' + fileName + ' …');
@@ -53,6 +70,10 @@ function sandboxFrame(html) {
       O.renderMarkdown(O.decode(buf), mount);
     } else if (ext === '.ipynb') {
       O.renderNotebook(JSON.parse(O.decode(buf)), mount, sandboxFrame);
+    } else if (THREE_EXTS.includes(ext)) {
+      await loadScript('vendor/three3d.js');
+      await loadScript('viewer3d.js');
+      window.octoview3d(buf, mount, ext);
     } else {
       msg('No preview for ' + ext + ' yet.');
     }

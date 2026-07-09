@@ -29,5 +29,5 @@ export default [
       globals: { ...globals.node, ...globals.browser },
     },
   },
-  { ignores: ['extension/vendor/**', 'Safari/**', 'coverage/**', 'node_modules/**'] },
+  { ignores: ['extension/vendor/**', 'Safari/**', 'coverage/**', 'node_modules/**', 'build/**'] },
 ];
