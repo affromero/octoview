@@ -15,6 +15,15 @@ const ARRAY_EXTS = ['.npy', '.npz'];
 const TABLE_EXTS = ['.parquet'];
 const MODEL_EXTS = ['.safetensors', '.gguf'];
 const IMAGE_EXTS = ['.exr', '.hdr', '.tif', '.tiff'];
+const SPLAT_EXTS = ['.splat'];
+
+// Cheap header sniff: a 3DGS .ply carries gaussian props; a plain .ply does not.
+// Lets us route .ply to the splat vs the mesh/point-cloud renderer without
+// loading either module first.
+function isPlySplatHead(buf) {
+  const head = new TextDecoder().decode(new Uint8Array(buf, 0, Math.min(2048, buf.byteLength)));
+  return /f_dc_0/.test(head) && /scale_0/.test(head) && /rot_0/.test(head);
+}
 
 // Heavy renderers are ES modules, imported only when their file type is opened,
 // so normal github browsing stays light.
@@ -96,11 +105,16 @@ async function render(pane, buf, ext) {
     pane.style.maxHeight = '82vh';
     pane.style.overflow = 'auto';
     O.renderNotebook(JSON.parse(O.decode(buf)), pane, (html) => sandboxFrame(html, 'ov-nb-out'));
-  } else if (THREE_EXTS.includes(ext)) {
+  } else if (THREE_EXTS.includes(ext) || SPLAT_EXTS.includes(ext)) {
     pane.classList.add('ov-fill');
     pane.style.height = '78vh';
-    const { render3D } = await loadModule('render3d.js');
-    render3D(buf, pane, ext);
+    if (SPLAT_EXTS.includes(ext) || (ext === '.ply' && isPlySplatHead(buf))) {
+      const { renderSplat } = await loadModule('render-splat.js');
+      renderSplat(buf, pane, ext);
+    } else {
+      const { render3D } = await loadModule('render3d.js');
+      render3D(buf, pane, ext);
+    }
   } else if (ARRAY_EXTS.includes(ext)) {
     pane.classList.add('ov-scroll');
     pane.style.maxHeight = '82vh';

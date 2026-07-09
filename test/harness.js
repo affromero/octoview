@@ -34,6 +34,17 @@ try {
   } else if (ext === '.exr' || ext === '.hdr' || ext === '.tif' || ext === '.tiff') {
     const { renderImage } = await import('/extension/render-image.js');
     renderImage(buf, mount, ext);
+  } else if (ext === '.splat') {
+    const { renderSplat } = await import('/extension/render-splat.js');
+    renderSplat(buf, mount, ext);
+  } else if (ext === '.ply') {
+    const { isPlySplat, renderSplat } = await import('/extension/render-splat.js');
+    if (isPlySplat(buf)) {
+      renderSplat(buf, mount, ext);
+    } else {
+      const { render3D } = await import('/extension/render3d.js');
+      render3D(buf, mount, ext);
+    }
   } else {
     const { render3D } = await import('/extension/render3d.js');
     render3D(buf, mount, ext);

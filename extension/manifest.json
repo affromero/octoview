@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "octoview",
   "version": "0.1.0",
-  "description": "Preview HTML reports, Jupyter notebooks, 3D meshes and point clouds inline on private GitHub repos.",
+  "description": "Preview HTML reports, notebooks, 3D/splats, arrays, tables, models and HDR images inline on private GitHub repos.",
   "content_scripts": [
     {
       "matches": ["https://github.com/*"],
@@ -19,6 +19,7 @@
         "render-table.js",
         "render-model.js",
         "render-image.js",
+        "render-splat.js",
         "vendor/three3d.esm.js",
         "vendor/hyparquet.esm.js"
       ],
