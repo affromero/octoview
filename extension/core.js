@@ -3,7 +3,18 @@
 // script AND the viewer page) where it attaches to `octoview`; imported directly
 // by the test suite, which reads the same global.
 (function (g) {
-  const SUPPORTED = ['.html', '.htm', '.ipynb', '.glb', '.gltf', '.obj', '.ply', '.pcd'];
+  const SUPPORTED = [
+    '.html',
+    '.htm',
+    '.ipynb',
+    '.glb',
+    '.gltf',
+    '.obj',
+    '.ply',
+    '.pcd',
+    '.npy',
+    '.npz',
+  ];
 
   const extname = (name) => {
     const i = (name || '').lastIndexOf('.');

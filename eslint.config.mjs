@@ -21,8 +21,8 @@ export default [
     },
   },
   {
-    // render3d.js is an ES module (lazy-imported by the content script).
-    files: ['extension/render3d.js'],
+    // render*.js are ES modules (lazy-imported by the content script).
+    files: ['extension/render*.js'],
     languageOptions: { sourceType: 'module' },
   },
   {

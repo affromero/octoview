@@ -58,6 +58,12 @@ const CASES = [
   { name: 'cube.obj', sample: 'samples/cube.obj', ok: (r) => r.mainCanvas },
   { name: 'points.ply', sample: 'samples/points.ply', ok: (r) => r.mainCanvas },
   { name: 'cloud.pcd', sample: 'samples/cloud.pcd', ok: (r) => r.mainCanvas },
+  { name: 'array.npy', sample: 'samples/array.npy', ok: (r) => r.mainCanvas },
+  {
+    name: 'array.npz',
+    sample: 'samples/array.npz',
+    ok: (r) => r.mainCanvas && /field|signal/.test(r.text),
+  },
 ];
 
 let failed = 0;

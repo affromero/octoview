@@ -22,6 +22,9 @@ try {
     mount.appendChild(sandboxFrame(O.decode(buf), 'ov-frame'));
   } else if (ext === '.ipynb') {
     O.renderNotebook(JSON.parse(O.decode(buf)), mount, (html) => sandboxFrame(html, 'ov-nb-out'));
+  } else if (ext === '.npy' || ext === '.npz') {
+    const { renderArray } = await import('/extension/render-array.js');
+    await renderArray(buf, mount, ext);
   } else {
     const { render3D } = await import('/extension/render3d.js');
     render3D(buf, mount, ext);
