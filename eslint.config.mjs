@@ -22,7 +22,7 @@ export default [
   },
   {
     // Tests and config: ESM on Node + jsdom.
-    files: ['tests/**/*.js', '*.config.js', '*.config.mjs'],
+    files: ['tests/**/*.js', 'test/**/*.mjs', '*.config.js', '*.config.mjs'],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: 'module',
