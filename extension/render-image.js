@@ -5,8 +5,8 @@
 // octoview tone-maps them to a canvas with an exposure slider. TIFF is 8-bit RGBA.
 import { THREE, EXRLoader, RGBELoader, TIFFLoader } from './vendor/three3d.esm.js';
 
-const MAX = 2048; // ponytail: cap preview dimension; stride-downsample bigger images
-
+// ponytail: renders at the image's native resolution (CSS-scaled to fit). Fine
+// for typical previews; add stride-downsampling if multi-thousand-px HDRs appear.
 export function renderImage(buf, mount, ext) {
   mount.textContent = '';
   mount.style.position = 'relative';
