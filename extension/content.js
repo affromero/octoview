@@ -12,6 +12,7 @@ const BTN_ID = 'octoview-btn';
 const PANE_ID = 'octoview-pane';
 const THREE_EXTS = ['.glb', '.gltf', '.obj', '.ply', '.pcd'];
 const ARRAY_EXTS = ['.npy', '.npz'];
+const TABLE_EXTS = ['.parquet'];
 
 // Heavy renderers are ES modules, imported only when their file type is opened,
 // so normal github browsing stays light.
@@ -104,6 +105,12 @@ async function render(pane, buf, ext) {
     pane.style.overflow = 'auto';
     const { renderArray } = await loadModule('render-array.js');
     await renderArray(buf, pane, ext);
+  } else if (TABLE_EXTS.includes(ext)) {
+    pane.classList.add('ov-scroll');
+    pane.style.maxHeight = '82vh';
+    pane.style.overflow = 'auto';
+    const { renderTable } = await loadModule('render-table.js');
+    await renderTable(buf, pane, ext);
   } else {
     msg(pane, 'No preview for ' + ext + ' yet.');
   }
@@ -158,7 +165,13 @@ function ensureStyle() {
     #${PANE_ID} .ov-nb-out{width:100%;height:480px;border:1px solid #30363d;border-radius:6px;background:#fff;margin:0 0 12px}
     #${PANE_ID} .ov-nb-img{max-width:100%;background:#fff;border-radius:6px;margin:0 0 12px}
     #${PANE_ID} .ov-arr-meta{padding:14px 18px 6px;font:12.5px/1.5 ui-monospace,monospace;color:#adbac7}
-    #${PANE_ID} .ov-arr-canvas{display:block;margin:0 18px 18px;border:1px solid #30363d;border-radius:6px}`;
+    #${PANE_ID} .ov-arr-canvas{display:block;margin:0 18px 18px;border:1px solid #30363d;border-radius:6px}
+    #${PANE_ID} .ov-tbl-meta{padding:14px 18px 8px;font:12.5px/1.5 ui-monospace,monospace;color:#adbac7}
+    #${PANE_ID} .ov-tbl-scroll{overflow-x:auto;margin:0 0 16px;padding:0 18px}
+    #${PANE_ID} .ov-tbl{border-collapse:collapse;font:12.5px/1.45 ui-monospace,monospace;white-space:nowrap}
+    #${PANE_ID} .ov-tbl th,#${PANE_ID} .ov-tbl td{border:1px solid #21262d;padding:3px 10px;text-align:left}
+    #${PANE_ID} .ov-tbl th{position:sticky;top:0;background:#161b22;color:#e6edf3}
+    #${PANE_ID} .ov-tbl-idx{color:#6e7681;text-align:right}`;
   document.head.appendChild(s);
 }
 

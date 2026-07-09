@@ -34,11 +34,13 @@ describe('shouldShow', () => {
     expect(O.shouldShow('/o/r/blob/main/mesh.glb', 'mesh.glb')).toBe(true);
     expect(O.shouldShow('/o/r/blob/main/cloud.pcd', 'cloud.pcd')).toBe(true);
     expect(O.shouldShow('/o/r/blob/main/model.ply', 'model.ply')).toBe(true);
+    expect(O.shouldShow('/o/r/blob/main/emb.npy', 'emb.npy')).toBe(true);
+    expect(O.shouldShow('/o/r/blob/main/data.parquet', 'data.parquet')).toBe(true);
   });
   it('hides for unsupported files and non-blob pages', () => {
     expect(O.shouldShow('/o/r/blob/main/train.py', 'train.py')).toBe(false);
     expect(O.shouldShow('/o/r/blob/main/notes.md', 'notes.md')).toBe(false); // GitHub renders markdown
-    expect(O.shouldShow('/o/r/blob/main/data.parquet', 'data.parquet')).toBe(false); // not shipped yet
+    expect(O.shouldShow('/o/r/blob/main/data.csv', 'data.csv')).toBe(false); // GitHub renders CSV
     expect(O.shouldShow('/o/r/tree/main', 'main')).toBe(false);
   });
 });

@@ -13,7 +13,13 @@
   "host_permissions": ["https://github.com/*", "https://raw.githubusercontent.com/*"],
   "web_accessible_resources": [
     {
-      "resources": ["render3d.js", "render-array.js", "vendor/three3d.esm.js"],
+      "resources": [
+        "render3d.js",
+        "render-array.js",
+        "render-table.js",
+        "vendor/three3d.esm.js",
+        "vendor/hyparquet.esm.js"
+      ],
       "matches": ["https://github.com/*"]
     }
   ],

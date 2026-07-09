@@ -14,6 +14,7 @@
     '.pcd',
     '.npy',
     '.npz',
+    '.parquet',
   ];
 
   const extname = (name) => {
