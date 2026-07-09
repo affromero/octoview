@@ -29,9 +29,9 @@
   const decode = (buf) => new TextDecoder().decode(buf);
   const joinLines = (v) => (Array.isArray(v) ? v.join('') : v || '');
 
-  // `htmlFrame(html)` returns an element that RUNS the given HTML's scripts (in the
-  // viewer that's a manifest sandbox iframe — the only context allowed 'unsafe-inline').
-  // Injecting it keeps this module browser-free and testable.
+  // `htmlFrame(html)` returns an element that renders the given HTML (the content
+  // script supplies a sandboxed iframe). Injecting it keeps this module browser-free
+  // and testable.
   function renderOutput(out, wrap, htmlFrame) {
     const data = out.data || {};
     if (out.output_type === 'stream') {

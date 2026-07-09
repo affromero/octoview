@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>octoview render harness</title>
+  </head>
+  <body>
+    <!-- Stands in for a github.com blob page: served with a github-like CSP so
+         the renderers run exactly as the content script's inline path does. core
+         and marked load as 'self' scripts (the content script equivalent); the
+         module dispatch mirrors content.js render(). -->
+    <div id="mount"></div>
+    <script src="/extension/vendor/marked.min.js"></script>
+    <script src="/extension/core.js"></script>
+    <script src="/test/harness.js" type="module"></script>
+  </body>
+</html>

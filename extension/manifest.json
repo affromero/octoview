@@ -2,24 +2,22 @@
   "manifest_version": 3,
   "name": "octoview",
   "version": "0.1.0",
-  "description": "Preview HTML reports, Markdown, and Jupyter notebooks straight from private GitHub repos.",
+  "description": "Preview HTML reports, Jupyter notebooks, 3D meshes and point clouds inline on private GitHub repos.",
   "content_scripts": [
     {
       "matches": ["https://github.com/*"],
-      "js": ["core.js", "content.js"],
+      "js": ["vendor/marked.min.js", "core.js", "content.js"],
       "run_at": "document_idle"
     }
   ],
-  "background": {
-    "scripts": ["background.js"],
-    "service_worker": "background.js"
-  },
   "host_permissions": ["https://github.com/*", "https://raw.githubusercontent.com/*"],
+  "web_accessible_resources": [
+    {
+      "resources": ["render3d.js", "vendor/three3d.esm.js"],
+      "matches": ["https://github.com/*"]
+    }
+  ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; connect-src 'self' https://raw.githubusercontent.com; frame-src 'self'",
-    "sandbox": "sandbox allow-scripts allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https: blob: data:; style-src 'unsafe-inline' https: data:; img-src * data: blob:; connect-src *; font-src * data:"
-  },
-  "sandbox": {
-    "pages": ["sandbox/report.html"]
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'"
   }
 }

@@ -39,18 +39,21 @@ renderer. Status is **verified in WebKit (Safari's engine) by an automated rende
 
 | Type                           | Extensions                                                                          | Renderer                                                                                         | Status |
 | ------------------------------ | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | :----: |
-| **HTML reports / plots**       | `.html` `.htm`                                                                      | manifest sandbox page (inline scripts run)                                                       |   ✅   |
+| **HTML reports / plots**       | `.html` `.htm`                                                                      | sandboxed frame, inline; static HTML content                                                     |   ✅   |
 | **Jupyter notebooks**          | `.ipynb`                                                                            | keeps the interactive outputs GitHub strips                                                      |   ✅   |
-| **3D meshes and point clouds** | `.glb` `.obj` `.ply` `.pcd`                                                         | three.js loaders (parsed on the main thread)                                                     |   ✅   |
+| **3D meshes and point clouds** | `.glb` `.gltf` `.obj` `.ply` `.pcd`                                                 | three.js loaders (parsed on the main thread), gizmo + point sliders                              |   ✅   |
 | **Gaussian splats**            | `.spz` `.splat` `.ksplat` `.sog` `.pcsogs` `.rad` `.lcc` `.lcc2` `.ply` `.splattie` | splat renderer, Spark formats plus LCC/RAD; `.ply` routed by header sniff (splat vs point cloud) |   🚧   |
 | **Model graphs**               | `.onnx` `.tflite` `.gguf` `.safetensors`                                            | Netron plus a tensor and metadata table                                                          |   🚧   |
 | **Tabular data**               | `.parquet` `.arrow` `.feather`                                                      | hyparquet                                                                                        |   🚧   |
 | **Array previews**             | `.npy` `.npz`                                                                       | header parse to a heatmap or image thumbnail                                                     |   🚧   |
 | **Scientific images**          | `.exr` `.hdr` `.tiff` `16-bit .png`                                                 | tone map to a canvas                                                                             |   🚧   |
 
-> **On WebKit.** Safari cannot fetch a main-thread `blob:` URL from inside a worker, so renderers
-> parse the file bytes on the main thread (three.js loaders, pure-JS parsers) or fetch a real
-> same-origin URL. Every format is verified in the WebKit test harness before it ships.
+> **On WebKit.** Two Safari limits shape the design. (1) Renderers parse file bytes on the main
+> thread (three.js loaders, pure-JS parsers) because Safari cannot fetch a main-thread `blob:` URL
+> from inside a worker. (2) A report's own inline `<script>` tags cannot execute in a Safari
+> extension (github's CSP is inherited by in-page frames, and Safari does not honor sandbox pages),
+> so HTML reports and interactive outputs render as **static** HTML. Everything octoview draws
+> itself (3D, tables, arrays, images) is unaffected. Every format is verified in the WebKit harness.
 
 ## Try it from this repo
 
@@ -58,7 +61,7 @@ Open any file below on GitHub and click **Preview** (after [installing](#develop
 
 | Sample                                             | Shows                                       |
 | -------------------------------------------------- | ------------------------------------------- |
-| [`samples/report.html`](samples/report.html)       | a live HTML report (its inline script runs) |
+| [`samples/report.html`](samples/report.html)       | a self-contained HTML report                |
 | [`samples/notebook.ipynb`](samples/notebook.ipynb) | a notebook whose interactive output is kept |
 | [`samples/cube.obj`](samples/cube.obj)             | a mesh                                      |
 | [`samples/points.ply`](samples/points.ply)         | a colored point cloud                       |
@@ -67,19 +70,20 @@ Open any file below on GitHub and click **Preview** (after [installing](#develop
 
 ## How it works
 
-Three constraints, each solved once.
+Everything renders **inline in the blob view**, no new tab. Clicking **Preview** swaps the code for
+the rendered file; clicking it again swaps back.
 
 - **Private-repo access.** The content script runs on `github.com`, so it has your cookies. It
-  resolves the file's tokenized `raw.githubusercontent.com` URL. No PAT, no OAuth.
-- **Script execution under GitHub's CSP.** github.com's CSP (`default-src 'none'`) is inherited by
-  any in-page frame (`srcdoc`, `blob:`, `data:`), and its `frame-src` blocks embedding the
-  extension, so a report's scripts cannot run in the page. octoview renders in the **extension's own
-  tab** instead, the one context with its own CSP. Arbitrary inline report scripts run in a
-  **manifest-declared sandbox page** that is postMessaged the report HTML.
-- **Crossing Safari's process boundary.** The github tab and the extension tab are separate
-  processes, so `postMessage`, `storage`, and cross-tab navigation do not reliably cross. The content
-  script messages a **background event page**, which opens the viewer tab with the URL baked into its
-  hash. No shared state, no handshake.
+  resolves the file's tokenized `raw.githubusercontent.com` URL and fetches the bytes. No PAT, no
+  OAuth.
+- **Rendering under GitHub's CSP.** A content script runs in an isolated world that github's CSP does
+  not bind, so octoview's own renderers (three.js on a `<canvas>`, DOM tables, notebook cells) run
+  right there in the page. Heavy renderers (the three.js bundle) are lazy-imported only when their
+  file type is opened, so normal browsing stays light.
+- **Reports are static.** An HTML report's _own_ inline scripts cannot execute in a Safari extension
+  (github's CSP is inherited by in-page frames, and Safari does not honor sandbox pages), so reports
+  and interactive notebook outputs render in a sandboxed frame as static HTML. Script-generated
+  charts (a bare Plotly canvas) stay blank; everything octoview draws itself is unaffected.
 
 The dispatch, URL resolution, and notebook rendering live in
 [`extension/core.js`](extension/core.js), kept free of browser APIs so they run under Vitest.
@@ -115,17 +119,15 @@ which is how Safari-specific breakage that jsdom cannot see gets caught.
 
 ```
 extension/
-  manifest.json        MV3 config (background event page, extension and sandbox CSP)
-  core.js              pure and DOM logic: dispatch, URL resolve, renderers (unit-tested)
-  content.js           github.com glue: button, fetch with cookies, message the background
-  background.js        opens the viewer tab with the resolved URL
-  viewer.html/.js      the extension tab that fetches and renders
-  viewer3d.js          three.js mesh and point-cloud renderer (lazy-loaded)
-  sandbox/report.html  runs a report's inline scripts under a relaxed CSP
-  vendor/              vendored self-contained libs (marked, three.js bundle)
+  manifest.json        MV3 config (content scripts, web-accessible render modules)
+  core.js              pure and DOM logic: dispatch, URL resolve, notebook render (unit-tested)
+  content.js           github.com: button, fetch with cookies, inline render pane
+  render3d.js          three.js mesh and point-cloud renderer (ES module, lazy-imported)
+  vendor/              vendored self-contained libs (marked, three.js ESM bundle)
 samples/               one file per type, previewable from the repo
 tests/                 vitest suite over core.js
-test/render.e2e.mjs    Chromium and WebKit render check
+test/harness.html/.js  stand-in blob page that drives the inline render path
+test/render.e2e.mjs    Chromium and WebKit render check under a github-like CSP
 ```
 
 ## License

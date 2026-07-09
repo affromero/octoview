@@ -1,7 +1,10 @@
 // End-to-end render check in real engines — Chromium AND WebKit (Safari's engine).
-// Serves the repo, loads the viewer page for each sample under the extension CSP,
-// and asserts it renders without CSP/console errors. This is what catches Safari-
-// specific breakage that jsdom can't (see the blob/CSP saga in git history).
+// octoview renders INLINE in the github blob page, so this serves a stand-in blob
+// page (test/harness.html) under a github-like CSP and drives the same dispatch
+// the content script uses. That is what catches Safari-specific breakage jsdom
+// can't (see the CSP saga in git history): three.js WebGL in WebKit, and the fact
+// that a sandboxed srcdoc report renders its STATIC HTML while its inline scripts
+// are refused by the inherited CSP (a Safari platform limit we design around).
 //
 //   npx playwright install chromium webkit   # once
 //   npm run test:e2e
@@ -16,7 +19,6 @@ const MIME = {
   '.html': 'text/html',
   '.js': 'text/javascript',
   '.json': 'application/json',
-  '.md': 'text/markdown',
   '.ipynb': 'application/json',
   '.css': 'text/css',
 };
@@ -34,21 +36,28 @@ const server = http.createServer(async (req, res) => {
 });
 await new Promise((r) => server.listen(0, r));
 const base = `http://localhost:${server.address().port}`;
-// Mirror manifest.json's CSPs faithfully, applied as real response headers so the
-// sandbox page is exercised under its actual policy (the white-page bug hid here).
-const EXT_CSP = `script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; connect-src 'self' ${base}; frame-src 'self'`;
-const SANDBOX_CSP = `sandbox allow-scripts allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https: blob: data:; style-src 'unsafe-inline' https: data:; img-src * data: blob:; connect-src *`;
+
+// A github-like CSP: 'self' scripts/modules load (the content-script equivalent),
+// srcdoc frames render but their inline scripts are refused (no 'unsafe-inline'),
+// which is exactly how github's inherited CSP treats our report/output frames.
+const GITHUB_CSP =
+  "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+  "img-src * data: blob:; frame-src 'self'; connect-src 'self'; font-src * data:";
 
 const CASES = [
-  { sample: 'samples/report.html', name: 'report.html', ok: (r) => r.frameCanvas },
   {
-    sample: 'samples/notebook.ipynb',
+    name: 'report.html',
+    sample: 'samples/report.html',
+    ok: (r) => /Interactive HTML report/.test(r.frameText),
+  },
+  {
     name: 'notebook.ipynb',
+    sample: 'samples/notebook.ipynb',
     ok: (r) => /Notebook sample/.test(r.text),
   },
-  { sample: 'samples/cube.obj', name: 'cube.obj', ok: (r) => r.mainCanvas },
-  { sample: 'samples/points.ply', name: 'points.ply', ok: (r) => r.mainCanvas },
-  { sample: 'samples/cloud.pcd', name: 'cloud.pcd', ok: (r) => r.mainCanvas },
+  { name: 'cube.obj', sample: 'samples/cube.obj', ok: (r) => r.mainCanvas },
+  { name: 'points.ply', sample: 'samples/points.ply', ok: (r) => r.mainCanvas },
+  { name: 'cloud.pcd', sample: 'samples/cloud.pcd', ok: (r) => r.mainCanvas },
 ];
 
 let failed = 0;
@@ -66,43 +75,39 @@ for (const [label, engine] of [
     const errors = [];
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
     page.on('pageerror', (e) => errors.push(e.message));
-    await page.route('**/viewer.html', async (route) => {
+    // Serve the stand-in blob page under github's CSP.
+    await page.route('**/test/harness.html', async (route) => {
       const rr = await route.fetch();
       await route.fulfill({
         body: await rr.text(),
         contentType: 'text/html',
-        headers: { 'content-security-policy': EXT_CSP },
+        headers: { 'content-security-policy': GITHUB_CSP },
       });
     });
-    await page.route('**/sandbox/report.html', async (route) => {
-      const rr = await route.fetch();
-      await route.fulfill({
-        body: await rr.text(),
-        contentType: 'text/html',
-        headers: { 'content-security-policy': SANDBOX_CSP },
-      });
-    });
-    const url = `${base}/extension/viewer.html#src=${encodeURIComponent(`${base}/${c.sample}`)}&name=${c.name}`;
+    const url = `${base}/test/harness.html#sample=${encodeURIComponent(`${base}/${c.sample}`)}&name=${c.name}`;
     await page.goto(url, { waitUntil: 'load' });
-    await page.waitForTimeout(3000);
-    const { text, mainCanvas } = await page.evaluate(() => ({
+    await page
+      .waitForFunction(() => window.__ovReady || window.__ovError, { timeout: 8000 })
+      .catch(() => {});
+    await page.waitForTimeout(1500);
+    const { text, mainCanvas, err } = await page.evaluate(() => ({
       text: document.body.textContent,
-      mainCanvas: !!document.querySelector('canvas'),
+      mainCanvas: !!document.querySelector('#mount canvas'),
+      err: window.__ovError || null,
     }));
-    let frameCanvas = false;
+    let frameText = '';
     for (const fr of page.frames()) {
       if (fr === page.mainFrame()) continue;
       try {
-        frameCanvas ||= await fr.evaluate(() => !!document.querySelector('canvas'));
+        frameText += await fr.evaluate(() => document.body.textContent);
       } catch {
         /* frame gone */
       }
     }
-    const cspErr = errors.some((e) => /csp|refused|policy/i.test(e));
-    const pass = c.ok({ text, frameCanvas, mainCanvas }) && !cspErr;
-    console.log(
-      `${pass ? '✓' : '✗'} [${label}] ${c.name}${errors.length ? '  ' + errors.slice(0, 2).join(' | ') : ''}`
-    );
+    const pass = !err && c.ok({ text, frameText, mainCanvas });
+    // Note: a refused srcdoc inline script is EXPECTED (the Safari static-render
+    // path), so CSP-refusal console noise is informational, not a failure.
+    console.log(`${pass ? '✓' : '✗'} [${label}] ${c.name}${err ? '  ERROR: ' + err : ''}`);
     if (!pass) failed++;
     await page.close();
   }
