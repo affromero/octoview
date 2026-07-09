@@ -28,6 +28,9 @@ try {
   } else if (ext === '.parquet') {
     const { renderTable } = await import('/extension/render-table.js');
     await renderTable(buf, mount, ext);
+  } else if (ext === '.safetensors' || ext === '.gguf') {
+    const { renderModel } = await import('/extension/render-model.js');
+    renderModel(buf, mount, ext);
   } else {
     const { render3D } = await import('/extension/render3d.js');
     render3D(buf, mount, ext);

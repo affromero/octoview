@@ -13,6 +13,7 @@ const PANE_ID = 'octoview-pane';
 const THREE_EXTS = ['.glb', '.gltf', '.obj', '.ply', '.pcd'];
 const ARRAY_EXTS = ['.npy', '.npz'];
 const TABLE_EXTS = ['.parquet'];
+const MODEL_EXTS = ['.safetensors', '.gguf'];
 
 // Heavy renderers are ES modules, imported only when their file type is opened,
 // so normal github browsing stays light.
@@ -111,6 +112,12 @@ async function render(pane, buf, ext) {
     pane.style.overflow = 'auto';
     const { renderTable } = await loadModule('render-table.js');
     await renderTable(buf, pane, ext);
+  } else if (MODEL_EXTS.includes(ext)) {
+    pane.classList.add('ov-scroll');
+    pane.style.maxHeight = '82vh';
+    pane.style.overflow = 'auto';
+    const { renderModel } = await loadModule('render-model.js');
+    renderModel(buf, pane, ext);
   } else {
     msg(pane, 'No preview for ' + ext + ' yet.');
   }
@@ -171,7 +178,9 @@ function ensureStyle() {
     #${PANE_ID} .ov-tbl{border-collapse:collapse;font:12.5px/1.45 ui-monospace,monospace;white-space:nowrap}
     #${PANE_ID} .ov-tbl th,#${PANE_ID} .ov-tbl td{border:1px solid #21262d;padding:3px 10px;text-align:left}
     #${PANE_ID} .ov-tbl th{position:sticky;top:0;background:#161b22;color:#e6edf3}
-    #${PANE_ID} .ov-tbl-idx{color:#6e7681;text-align:right}`;
+    #${PANE_ID} .ov-tbl-idx{color:#6e7681;text-align:right}
+    #${PANE_ID} .ov-mdl-meta{padding:14px 18px 4px;font:12.5px/1.5 ui-monospace,monospace;color:#e6edf3}
+    #${PANE_ID} .ov-mdl-h{padding:14px 18px 6px;font:600 12px/1.4 -apple-system,sans-serif;color:#7d8590;text-transform:uppercase;letter-spacing:.04em}`;
   document.head.appendChild(s);
 }
 
