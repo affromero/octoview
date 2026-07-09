@@ -2,7 +2,7 @@
   "name": "octoview",
   "version": "0.1.0",
   "private": true,
-  "description": "Preview HTML, Gaussian splats, and Jupyter notebooks straight from private GitHub repos — a Safari web extension.",
+  "description": "Preview HTML reports, Markdown, and Jupyter notebooks straight from private GitHub repos — a Safari web extension. (3D preview in progress.)",
   "type": "module",
   "license": "MIT",
   "author": "Andres Romero <me@afromero.co>",
@@ -10,6 +10,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "node test/render.e2e.mjs",
     "coverage": "vitest run --coverage",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{js,mjs,json,md,yml,yaml}\"",
@@ -32,6 +33,7 @@
     "globals": "^17.7.0",
     "jsdom": "^29.1.1",
     "lint-staged": "^17.0.8",
+    "playwright": "^1.61.1",
     "prettier": "^3.9.4",
     "vitest": "^4.1.9"
   }
