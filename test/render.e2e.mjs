@@ -69,6 +69,16 @@ const CASES = [
     sample: 'samples/metrics.parquet',
     ok: (r) => /500 rows × 5 cols/.test(r.text) && /accuracy/.test(r.text),
   },
+  {
+    name: 'model.safetensors',
+    sample: 'samples/model.safetensors',
+    ok: (r) => /4 tensors/.test(r.text) && /embed_tokens/.test(r.text),
+  },
+  {
+    name: 'model.gguf',
+    sample: 'samples/model.gguf',
+    ok: (r) => /GGUF v3/.test(r.text) && /llama/.test(r.text) && /token_embd/.test(r.text),
+  },
 ];
 
 let failed = 0;

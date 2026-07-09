@@ -17,6 +17,7 @@
         "render3d.js",
         "render-array.js",
         "render-table.js",
+        "render-model.js",
         "vendor/three3d.esm.js",
         "vendor/hyparquet.esm.js"
       ],

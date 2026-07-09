@@ -15,6 +15,8 @@
     '.npy',
     '.npz',
     '.parquet',
+    '.safetensors',
+    '.gguf',
   ];
 
   const extname = (name) => {
