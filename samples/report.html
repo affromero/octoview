@@ -30,9 +30,31 @@
   <body>
     <h1>Interactive HTML report</h1>
     <p>
-      GitHub shows this file's raw source. octoview renders it — and its inline script runs, so this
-      is <b>live</b>: <span id="time"></span>
+      GitHub shows this file's raw source. octoview renders it in place. Self-contained HTML content
+      (headings, tables, styled markup) shows exactly as authored. <span id="time"></span>
     </p>
+    <table
+      style="border-collapse: collapse; margin-top: 12px; font-variant-numeric: tabular-nums"
+    >
+      <thead>
+        <tr>
+          <th style="text-align: left; border-bottom: 2px solid #d1d9e0; padding: 4px 16px 4px 0">
+            metric
+          </th>
+          <th style="text-align: right; border-bottom: 2px solid #d1d9e0; padding: 4px 0">value</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding: 4px 16px 4px 0">accuracy</td>
+          <td style="text-align: right; color: #1a7f37">0.947</td>
+        </tr>
+        <tr>
+          <td style="padding: 4px 16px 4px 0">loss</td>
+          <td style="text-align: right; color: #0969da">0.081</td>
+        </tr>
+      </tbody>
+    </table>
     <canvas id="c" width="480" height="160"></canvas>
     <script>
       // Proof the sandbox executes scripts: an animated sine wave + a live clock.

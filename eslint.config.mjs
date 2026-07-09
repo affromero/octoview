@@ -21,12 +21,17 @@ export default [
     },
   },
   {
-    // Tests and config: ESM on Node + jsdom.
-    files: ['tests/**/*.js', 'test/**/*.mjs', '*.config.js', '*.config.mjs'],
+    // render3d.js is an ES module (lazy-imported by the content script).
+    files: ['extension/render3d.js'],
+    languageOptions: { sourceType: 'module' },
+  },
+  {
+    // Tests and config: ESM on Node + jsdom, plus the browser render harness.
+    files: ['tests/**/*.js', 'test/**/*.{js,mjs}', '*.config.js', '*.config.mjs'],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: 'module',
-      globals: { ...globals.node, ...globals.browser },
+      globals: { ...globals.node, ...globals.browser, octoview: 'readonly' },
     },
   },
   { ignores: ['extension/vendor/**', 'Safari/**', 'coverage/**', 'node_modules/**', 'build/**'] },

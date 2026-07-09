@@ -1,12 +1,19 @@
-// octoview 3D renderer — meshes and point clouds via three.js loaders, which
-// PARSE the ArrayBuffer on the main thread (no workers, no blob URLs), so they're
-// WebKit safe. Lazy-loaded with vendor/three3d.js (exposes window.OV3D). Adds a
-// MeshLab-style orientation gizmo (toggleable) and, for point clouds, size and
-// color-intensity sliders. Exposed as window.octoview3d(buf, mount, ext).
-window.octoview3d = function render3D(buf, mount, ext) {
-  const { THREE, GLTFLoader, OBJLoader, PLYLoader, PCDLoader, OrbitControls, ViewHelper } =
-    window.OV3D;
+// octoview 3D renderer, lazy-imported inline by the content script only for 3D
+// files. three.js loaders PARSE the ArrayBuffer on the main thread (no workers,
+// no blob URLs), so they are WebKit safe, and they run in the content script's
+// isolated world, which is not bound by github.com's CSP. Adds a MeshLab-style
+// orientation gizmo (toggleable) plus size and color sliders for point clouds.
+import {
+  THREE,
+  GLTFLoader,
+  OBJLoader,
+  PLYLoader,
+  PCDLoader,
+  OrbitControls,
+  ViewHelper,
+} from './vendor/three3d.esm.js';
 
+export function render3D(buf, mount, ext) {
   ensureStyle();
   mount.style.position = 'relative';
 
@@ -35,7 +42,7 @@ window.octoview3d = function render3D(buf, mount, ext) {
   keyLight.position.set(1, 1, 1);
   scene.add(keyLight);
 
-  let pointsMat = null; // set when the object is a point cloud
+  let pointsMat = null;
   let maxDim = 1;
   let boxMinY = 0;
 
@@ -57,13 +64,12 @@ window.octoview3d = function render3D(buf, mount, ext) {
   let gizmoOn = true;
 
   const afterLoad = () => {
-    // A grid sized to the model, sitting at its base, for spatial context.
     const grid = new THREE.GridHelper(maxDim * 4, 16, 0x30363d, 0x1c2128);
     grid.position.y = boxMinY;
     scene.add(grid);
 
     if (pointsMat) {
-      pointsMat.size = maxDim * 0.02; // visible regardless of loader defaults
+      pointsMat.size = maxDim * 0.02;
       pointsMat.sizeAttenuation = true;
     }
 
@@ -73,7 +79,7 @@ window.octoview3d = function render3D(buf, mount, ext) {
     });
     buildPanel(mount, pointsMat, maxDim, (on) => (gizmoOn = on));
 
-    renderer.autoClear = false; // clear manually so the gizmo composites over the scene
+    renderer.autoClear = false;
     const clock = new THREE.Clock();
     (function loop() {
       requestAnimationFrame(loop);
@@ -85,13 +91,14 @@ window.octoview3d = function render3D(buf, mount, ext) {
       if (gizmoOn) viewHelper.render(renderer);
     })();
 
-    window.addEventListener('resize', () => {
+    const resize = () => {
       const W = mount.clientWidth || w;
       const H = mount.clientHeight || h;
       renderer.setSize(W, H);
       camera.aspect = W / H;
       camera.updateProjectionMatrix();
-    });
+    };
+    window.addEventListener('resize', resize);
   };
 
   try {
@@ -143,7 +150,7 @@ window.octoview3d = function render3D(buf, mount, ext) {
   } catch (e) {
     fail(e);
   }
-};
+}
 
 function buildPanel(mount, pointsMat, maxDim, onGizmo) {
   const panel = document.createElement('div');
