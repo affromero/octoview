@@ -11,6 +11,13 @@ const O = octoview;
 const BTN_ID = 'octoview-btn';
 const PANE_ID = 'octoview-pane';
 const THREE_EXTS = ['.glb', '.gltf', '.obj', '.ply', '.pcd'];
+const ARRAY_EXTS = ['.npy', '.npz'];
+
+// Heavy renderers are ES modules, imported only when their file type is opened,
+// so normal github browsing stays light.
+function loadModule(file) {
+  return import(browser.runtime.getURL(file));
+}
 
 function fileName() {
   return decodeURIComponent(location.pathname.split('/').pop() || 'file');
@@ -89,8 +96,14 @@ async function render(pane, buf, ext) {
   } else if (THREE_EXTS.includes(ext)) {
     pane.classList.add('ov-fill');
     pane.style.height = '78vh';
-    const { render3D } = await import(browser.runtime.getURL('render3d.js'));
+    const { render3D } = await loadModule('render3d.js');
     render3D(buf, pane, ext);
+  } else if (ARRAY_EXTS.includes(ext)) {
+    pane.classList.add('ov-scroll');
+    pane.style.maxHeight = '82vh';
+    pane.style.overflow = 'auto';
+    const { renderArray } = await loadModule('render-array.js');
+    await renderArray(buf, pane, ext);
   } else {
     msg(pane, 'No preview for ' + ext + ' yet.');
   }
@@ -143,7 +156,9 @@ function ensureStyle() {
       font:12.5px/1.5 ui-monospace,monospace;white-space:pre-wrap;color:#adbac7}
     #${PANE_ID} .ov-nb-err{color:#ff7b72}
     #${PANE_ID} .ov-nb-out{width:100%;height:480px;border:1px solid #30363d;border-radius:6px;background:#fff;margin:0 0 12px}
-    #${PANE_ID} .ov-nb-img{max-width:100%;background:#fff;border-radius:6px;margin:0 0 12px}`;
+    #${PANE_ID} .ov-nb-img{max-width:100%;background:#fff;border-radius:6px;margin:0 0 12px}
+    #${PANE_ID} .ov-arr-meta{padding:14px 18px 6px;font:12.5px/1.5 ui-monospace,monospace;color:#adbac7}
+    #${PANE_ID} .ov-arr-canvas{display:block;margin:0 18px 18px;border:1px solid #30363d;border-radius:6px}`;
   document.head.appendChild(s);
 }
 
