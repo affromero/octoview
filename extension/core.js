@@ -17,6 +17,10 @@
     '.parquet',
     '.safetensors',
     '.gguf',
+    '.exr',
+    '.hdr',
+    '.tif',
+    '.tiff',
   ];
 
   const extname = (name) => {

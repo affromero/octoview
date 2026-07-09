@@ -79,6 +79,21 @@ const CASES = [
     sample: 'samples/model.gguf',
     ok: (r) => /GGUF v3/.test(r.text) && /llama/.test(r.text) && /token_embd/.test(r.text),
   },
+  {
+    name: 'depth.tiff',
+    sample: 'samples/depth.tiff',
+    ok: (r) => r.mainCanvas && /TIFF/.test(r.text),
+  },
+  {
+    name: 'render.hdr',
+    sample: 'samples/render.hdr',
+    ok: (r) => r.mainCanvas && /Radiance HDR/.test(r.text),
+  },
+  {
+    name: 'render.exr',
+    sample: 'samples/render.exr',
+    ok: (r) => r.mainCanvas && /EXR/.test(r.text),
+  },
 ];
 
 let failed = 0;

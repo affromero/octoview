@@ -18,6 +18,7 @@
         "render-array.js",
         "render-table.js",
         "render-model.js",
+        "render-image.js",
         "vendor/three3d.esm.js",
         "vendor/hyparquet.esm.js"
       ],

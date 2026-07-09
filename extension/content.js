@@ -14,6 +14,7 @@ const THREE_EXTS = ['.glb', '.gltf', '.obj', '.ply', '.pcd'];
 const ARRAY_EXTS = ['.npy', '.npz'];
 const TABLE_EXTS = ['.parquet'];
 const MODEL_EXTS = ['.safetensors', '.gguf'];
+const IMAGE_EXTS = ['.exr', '.hdr', '.tif', '.tiff'];
 
 // Heavy renderers are ES modules, imported only when their file type is opened,
 // so normal github browsing stays light.
@@ -118,6 +119,12 @@ async function render(pane, buf, ext) {
     pane.style.overflow = 'auto';
     const { renderModel } = await loadModule('render-model.js');
     renderModel(buf, pane, ext);
+  } else if (IMAGE_EXTS.includes(ext)) {
+    pane.classList.add('ov-scroll');
+    pane.style.maxHeight = '82vh';
+    pane.style.overflow = 'auto';
+    const { renderImage } = await loadModule('render-image.js');
+    renderImage(buf, pane, ext);
   } else {
     msg(pane, 'No preview for ' + ext + ' yet.');
   }
@@ -180,7 +187,10 @@ function ensureStyle() {
     #${PANE_ID} .ov-tbl th{position:sticky;top:0;background:#161b22;color:#e6edf3}
     #${PANE_ID} .ov-tbl-idx{color:#6e7681;text-align:right}
     #${PANE_ID} .ov-mdl-meta{padding:14px 18px 4px;font:12.5px/1.5 ui-monospace,monospace;color:#e6edf3}
-    #${PANE_ID} .ov-mdl-h{padding:14px 18px 6px;font:600 12px/1.4 -apple-system,sans-serif;color:#7d8590;text-transform:uppercase;letter-spacing:.04em}`;
+    #${PANE_ID} .ov-mdl-h{padding:14px 18px 6px;font:600 12px/1.4 -apple-system,sans-serif;color:#7d8590;text-transform:uppercase;letter-spacing:.04em}
+    #${PANE_ID} .ov-img-panel{display:flex;flex-direction:column;gap:4px;margin:0 18px 18px;
+      font:12px ui-monospace,monospace;color:#adbac7;width:260px}
+    #${PANE_ID} .ov-img-panel input{accent-color:#2ea043}`;
   document.head.appendChild(s);
 }
 
