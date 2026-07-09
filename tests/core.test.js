@@ -30,7 +30,6 @@ describe('extname', () => {
 describe('shouldShow', () => {
   it('shows on a blob page for a supported, case-insensitive extension', () => {
     expect(O.shouldShow('/o/r/blob/main/report.HTML', 'report.HTML')).toBe(true);
-    expect(O.shouldShow('/o/r/blob/main/a/b/notes.md', 'notes.md')).toBe(true);
     expect(O.shouldShow('/o/r/blob/main/nb.ipynb', 'nb.ipynb')).toBe(true);
     expect(O.shouldShow('/o/r/blob/main/mesh.glb', 'mesh.glb')).toBe(true);
     expect(O.shouldShow('/o/r/blob/main/cloud.pcd', 'cloud.pcd')).toBe(true);
@@ -38,6 +37,7 @@ describe('shouldShow', () => {
   });
   it('hides for unsupported files and non-blob pages', () => {
     expect(O.shouldShow('/o/r/blob/main/train.py', 'train.py')).toBe(false);
+    expect(O.shouldShow('/o/r/blob/main/notes.md', 'notes.md')).toBe(false); // GitHub renders markdown
     expect(O.shouldShow('/o/r/blob/main/data.parquet', 'data.parquet')).toBe(false); // not shipped yet
     expect(O.shouldShow('/o/r/tree/main', 'main')).toBe(false);
   });
@@ -58,14 +58,6 @@ describe('pickRawUrl', () => {
     expect(O.pickRawUrl(doc, 'https://github.com/o/r/blob/dev/x/notes.md')).toBe(
       'https://github.com/o/r/raw/dev/x/notes.md'
     );
-  });
-});
-
-describe('renderMarkdown', () => {
-  it('renders markdown into a .ov-md block', () => {
-    const mount = document.createElement('div');
-    O.renderMarkdown('# Heading', mount);
-    expect(mount.querySelector('.ov-nb .ov-md').innerHTML).toContain('# Heading');
   });
 });
 

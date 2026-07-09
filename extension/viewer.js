@@ -70,8 +70,6 @@ const THREE_EXTS = ['.glb', '.gltf', '.obj', '.ply', '.pcd'];
       const f = sandboxFrame(O.decode(buf));
       f.className = 'ov-full';
       mount.appendChild(f);
-    } else if (ext === '.md') {
-      O.renderMarkdown(O.decode(buf), mount);
     } else if (ext === '.ipynb') {
       O.renderNotebook(JSON.parse(O.decode(buf)), mount, sandboxFrame);
     } else if (THREE_EXTS.includes(ext)) {

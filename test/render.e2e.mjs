@@ -41,7 +41,6 @@ const SANDBOX_CSP = `sandbox allow-scripts allow-popups allow-modals; script-src
 
 const CASES = [
   { sample: 'samples/report.html', name: 'report.html', ok: (r) => r.frameCanvas },
-  { sample: 'samples/notes.md', name: 'notes.md', ok: (r) => /Markdown sample/.test(r.text) },
   {
     sample: 'samples/notebook.ipynb',
     name: 'notebook.ipynb',

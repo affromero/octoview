@@ -3,7 +3,7 @@
 // script AND the viewer page) where it attaches to `octoview`; imported directly
 // by the test suite, which reads the same global.
 (function (g) {
-  const SUPPORTED = ['.html', '.htm', '.md', '.ipynb', '.glb', '.gltf', '.obj', '.ply', '.pcd'];
+  const SUPPORTED = ['.html', '.htm', '.ipynb', '.glb', '.gltf', '.obj', '.ply', '.pcd'];
 
   const extname = (name) => {
     const i = (name || '').lastIndexOf('.');
@@ -28,16 +28,6 @@
 
   const decode = (buf) => new TextDecoder().decode(buf);
   const joinLines = (v) => (Array.isArray(v) ? v.join('') : v || '');
-
-  function renderMarkdown(text, mount) {
-    const wrap = document.createElement('div');
-    wrap.className = 'ov-nb';
-    const d = document.createElement('div');
-    d.className = 'ov-md';
-    d.innerHTML = g.marked.parse(text);
-    wrap.appendChild(d);
-    mount.appendChild(wrap);
-  }
 
   // `htmlFrame(html)` returns an element that RUNS the given HTML's scripts (in the
   // viewer that's a manifest sandbox iframe — the only context allowed 'unsafe-inline').
@@ -98,7 +88,6 @@
     shouldShow,
     pickRawUrl,
     decode,
-    renderMarkdown,
     renderNotebook,
     renderOutput,
   };
