@@ -21,6 +21,7 @@
     '.hdr',
     '.tif',
     '.tiff',
+    '.splat',
   ];
 
   const extname = (name) => {

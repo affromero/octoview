@@ -94,6 +94,16 @@ const CASES = [
     sample: 'samples/render.exr',
     ok: (r) => r.mainCanvas && /EXR/.test(r.text),
   },
+  {
+    name: 'head.splat',
+    sample: 'samples/head.splat',
+    ok: (r) => r.mainCanvas && /splats/.test(r.text),
+  },
+  {
+    name: 'splat.ply',
+    sample: 'samples/splat.ply',
+    ok: (r) => r.mainCanvas && /splats/.test(r.text),
+  },
 ];
 
 let failed = 0;
