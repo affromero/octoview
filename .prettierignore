@@ -1,0 +1,5 @@
+extension/vendor/
+Safari/
+coverage/
+node_modules/
+package-lock.json
