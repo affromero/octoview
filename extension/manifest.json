@@ -6,18 +6,15 @@
   "content_scripts": [
     {
       "matches": ["https://github.com/*"],
-      "js": ["content.js"],
+      "js": ["vendor/marked.min.js", "core.js", "content.js"],
       "run_at": "document_idle"
     }
   ],
   "host_permissions": ["https://github.com/*", "https://raw.githubusercontent.com/*"],
   "web_accessible_resources": [
     {
-      "resources": ["viewer.html", "viewer.js", "renderers/*", "vendor/*"],
+      "resources": ["vendor/splattie-widget.cdn.js"],
       "matches": ["https://github.com/*"]
     }
-  ],
-  "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
-  }
+  ]
 }
