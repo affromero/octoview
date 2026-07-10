@@ -120,13 +120,15 @@ const setOpacity = (v) =>
     el.value = String(val);
     el.dispatchEvent(new Event('input', { bubbles: true }));
   }, v);
+// Fade all the way down to the slider floor so the solid surface dissolves into
+// a translucent cloud of the underlying gaussians, then back up — a clear reveal.
 if (await opacity.count()) {
-  for (let v = 1; v >= 0.32; v -= 0.05) {
+  for (let v = 1; v >= 0.08; v -= 0.04) {
     await setOpacity(v);
     await snap();
   }
-  await hold(3);
-  for (let v = 0.32; v <= 1; v += 0.05) {
+  await hold(6);
+  for (let v = 0.08; v <= 1; v += 0.04) {
     await setOpacity(v);
     await snap();
   }
