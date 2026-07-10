@@ -72,6 +72,15 @@ const CASES = [
       return false;
     },
   },
+  {
+    file: 'lcc/meta.lcc',
+    check: (page) =>
+      page
+        .locator('#octoview-pane canvas')
+        .first()
+        .isVisible()
+        .catch(() => false),
+  },
 ];
 
 const ctx = await chromium.launchPersistentContext('', {
@@ -82,8 +91,9 @@ const ctx = await chromium.launchPersistentContext('', {
 await ctx.route('https://github.com/**', async (route) => {
   const { pathname } = new URL(route.request().url());
   if (pathname.includes('/raw/')) {
+    const samplePath = pathname.split('/samples/')[1];
     const body = await readFile(
-      join(ROOT, pathname.split('/samples/')[1] ? 'samples' : '.', pathname.split('/').pop())
+      join(ROOT, samplePath ? 'samples' : '.', samplePath || pathname.split('/').pop())
     );
     return route.fulfill({ body, contentType: 'application/octet-stream' });
   }
