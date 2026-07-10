@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import { zipSync } from 'fflate';
 import { parseGguf } from '../extension/render-model.js';
-import { parseSpz, parseSog } from '../extension/splat-decode.js';
+import { parseSpz, parseSog, parseLcc } from '../extension/splat-decode.js';
 
 const u8 = (arr) => new Uint8Array(arr).buffer;
 
@@ -48,8 +48,7 @@ describe('parser DoS hardening', () => {
     expect(Date.now() - t0).toBeLessThan(1000);
   });
 
-  it('LCC: overlapping index records that sum past data.bin are rejected', async () => {
-    const { parseLcc } = await import('../extension/lcc-decode.js');
+  it('LCC: overlapping index records that sum past data.bin are rejected', () => {
     const meta = new TextEncoder().encode(
       JSON.stringify({
         totalLevel: 1,

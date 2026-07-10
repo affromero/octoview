@@ -98,7 +98,7 @@ Open any file below on GitHub and click **Preview** (after [installing](#develop
 <summary><b>Screenshots</b> — what Preview looks like (click to expand)</summary>
 <br>
 
-_An HTML report rendered live — its own scripts run, sandboxed:_
+_HTML report JavaScript is live in the sandbox — the report’s dynamic **LIVE** badge and chart are running:_
 
 ![Live HTML report](assets/screenshots/report.png)
 
@@ -110,7 +110,7 @@ _A colored point cloud:_
 
 ![Point cloud](assets/screenshots/points.png)
 
-_A notebook with its interactive Plotly output kept:_
+_Jupyter keeps the dynamic effect: the Plotly chart is interactive, while code cells are syntax-highlighted:_
 
 ![Notebook](assets/screenshots/notebook.png)
 
