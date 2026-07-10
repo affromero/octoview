@@ -25,7 +25,6 @@ export default [
     // content.js stay classic scripts.
     files: [
       'extension/render*.js',
-      'extension/lcc-decode.js',
       'extension/splat-decode.js',
       'extension/unzip.js',
       'extension/splat-viewer.js',
