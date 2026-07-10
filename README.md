@@ -72,7 +72,7 @@ renderer. Status is **verified in WebKit (Safari's engine) by an automated rende
 
 Open any file below on GitHub and click **Preview** (after [installing](#develop)).
 
-- **3D and Gaussian splats:** [cube.obj](samples/cube.obj) · [points.ply](samples/points.ply) · [cloud.pcd](samples/cloud.pcd) · [capybara.splat](samples/capybara.splat) · [capybara.ply](samples/capybara.ply) (compressed 3DGS) · [capybara.spz](samples/capybara.spz) · [capybara.ksplat](samples/capybara.ksplat) · [capybara.sog](samples/capybara.sog) · [head.splattie](samples/head.splattie) · [butterfly.spz](samples/butterfly.spz)
+- **3D and Gaussian splats:** [cube.obj](samples/cube.obj) · [points.ply](samples/points.ply) · [cloud.pcd](samples/cloud.pcd) · [capybara.splat](samples/capybara.splat) · [capybara.ply](samples/capybara.ply) (compressed 3DGS) · [capybara.spz](samples/capybara.spz) · [capybara.ksplat](samples/capybara.ksplat) · [capybara.sog](samples/capybara.sog) · [head.splattie](samples/head.splattie) · [butterfly.spz](samples/butterfly.spz) · [capybara-lod.rad](samples/capybara-lod.rad) · [LCC bundle](samples/lcc/meta.lcc)
 - **Arrays and tables:** [array.npy](samples/array.npy) · [array.npz](samples/array.npz) · [metrics.parquet](samples/metrics.parquet) · [metrics.arrow](samples/metrics.arrow)
 - **Model graphs:** [model.safetensors](samples/model.safetensors) · [model.gguf](samples/model.gguf) · [model.onnx](samples/model.onnx)
 - **Scientific images:** [render.hdr](samples/render.hdr) · [render.exr](samples/render.exr) · [depth.tiff](samples/depth.tiff)

@@ -246,6 +246,17 @@ describe('splat decoders', () => {
     expect(splat.size[0]).toBeCloseTo(1);
   });
 
+  it('decodes the committed LCC sample bundle', () => {
+    const splat = parseLcc(
+      fixture('lcc/meta.lcc'),
+      fixture('lcc/index.bin'),
+      fixture('lcc/data.bin')
+    );
+    expect(splat.count).toBe(4);
+    expect([...splat.pos.slice(0, 3)]).toEqual([0, 0, 0]);
+    expect(splat.col[0]).toBe(1);
+  });
+
   it('parses antimatter15 .splat records', () => {
     const buf = new ArrayBuffer(64); // two splats
     const dv = new DataView(buf);
