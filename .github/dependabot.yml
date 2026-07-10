@@ -1,0 +1,26 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      # Don't adopt a release until it's 7 days old — blunts the window where a
+      # freshly-published compromised version could land in a PR.
+      default-days: 7
+    open-pull-requests-limit: 10
+    groups:
+      npm:
+        patterns:
+          - '*'
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns:
+          - '*'

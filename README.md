@@ -9,6 +9,10 @@
 _Gaussian splats, meshes, point clouds, depth and EXR, HTML reports, notebooks, tabular data. The ML and data files GitHub serves as raw bytes._
 
 [![CI](https://github.com/affromero/octoview/actions/workflows/ci.yml/badge.svg)](https://github.com/affromero/octoview/actions/workflows/ci.yml)
+[![Security](https://github.com/affromero/octoview/actions/workflows/security.yml/badge.svg)](https://github.com/affromero/octoview/actions/workflows/security.yml)
+[![Gitleaks](https://github.com/affromero/octoview/actions/workflows/gitleaks.yml/badge.svg)](https://github.com/affromero/octoview/actions/workflows/gitleaks.yml)
+[![Security Policy](https://img.shields.io/badge/security-policy-blue)](SECURITY.md)
+[![Dependabot](https://img.shields.io/badge/Dependabot-enabled-025E8C?logo=dependabot&logoColor=white)](.github/dependabot.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-unit_%2B_webkit_e2e-brightgreen)](test/render.e2e.mjs)
 [![Safari](https://img.shields.io/badge/Safari-Web_Extension-006CFF?logo=safari&logoColor=white)](https://developer.apple.com/documentation/safariservices/safari_web_extensions)
