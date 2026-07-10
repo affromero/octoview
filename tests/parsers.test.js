@@ -452,3 +452,88 @@ describe('spark splat decoders (spz / ksplat / sog)', () => {
     expect(manifest.avatar.splat.format ?? 'ply').not.toBe('spz'); // fixture is ply-based
   });
 });
+
+describe('spz v4 (zstd stream container)', () => {
+  it('decodes the capybara .spz v4 to the reference geometry (RUB convention: y/z mirrored)', () => {
+    const s = parseSpz(fixture('capybara-v4.spz'));
+    const r = parseSplatBin(fixture('capybara.splat'));
+    expect(s.count).toBe(r.count);
+    // same scene, but spz v4 canonical coords negate y and z vs the source ply
+    const span = (arr, n, d) => {
+      let mn = 1e9,
+        mx = -1e9;
+      for (let i = 0; i < n; i++) {
+        const v = arr[i * 3 + d];
+        if (v < mn) mn = v;
+        if (v > mx) mx = v;
+      }
+      return [mn, mx];
+    };
+    for (let d = 0; d < 3; d++) {
+      const [smn, smx] = span(s.pos, s.count, d);
+      const [rmn, rmx] = span(r.pos, r.count, d);
+      // spans match in extent regardless of mirroring
+      expect(smx - smn).toBeCloseTo(rmx - rmn, 1);
+    }
+    let sa = 0,
+      ra = 0;
+    for (let i = 0; i < s.count; i++) {
+      sa += s.col[i * 4 + 3];
+      ra += r.col[i * 4 + 3];
+    }
+    expect(sa / s.count).toBeCloseTo(ra / r.count, 2);
+  });
+
+  it('rejects a v4 file with a corrupt stream table', () => {
+    const buf = new Uint8Array(fixture('capybara-v4.spz').slice(0, 64));
+    const dv = new DataView(buf.buffer);
+    dv.setUint32(16, 60, true); // toc points into garbage
+    expect(() => parseSpz(buf.buffer)).toThrow();
+  });
+});
+
+describe('arrow tables', () => {
+  it('reads metrics.arrow (same dataset as metrics.parquet)', async () => {
+    const { tableFromIPC } = await import('../extension/vendor/flechette.esm.js');
+    const t = tableFromIPC(new Uint8Array(fixture('metrics.arrow')));
+    expect(t.numRows).toBe(500);
+    expect(t.names).toEqual(['id', 'split', 'loss', 'accuracy', 'label']);
+    // first row, known from the parquet fixture the file was converted from
+    expect(t.getChild('label').at(0)).toBe('cat');
+    expect(t.getChild('split').at(0)).toBe('test');
+    expect(t.getChild('loss').at(0)).toBeCloseTo(0.1274, 4);
+    expect(t.getChild('accuracy').at(499)).toBeGreaterThan(0);
+  });
+});
+
+describe('parseOnnx / layoutGraph', () => {
+  it('parses the fixture graph: ops, edges, initializers', async () => {
+    const { parseOnnx, layoutGraph } = await import('../extension/render-onnx.js');
+    const g = parseOnnx(fixture('model.onnx'));
+    expect(g.name).toBe('tiny_classifier');
+    expect(g.nodes.map((n) => n.op)).toEqual([
+      'Conv',
+      'Relu',
+      'GlobalAveragePool',
+      'Flatten',
+      'MatMul',
+      'Softmax',
+    ]);
+    expect(g.inputs).toContain('input');
+    expect(g.outputs).toEqual(['probs']);
+    expect(g.initializers.map((t) => t.name)).toEqual(['conv.weight', 'fc.weight']);
+    expect(g.initializers[0].dims).toEqual([8, 1, 3, 3]);
+    expect(g.initializers[0].dtype).toBe('f32');
+
+    const { nodes, edges } = layoutGraph(g);
+    // a pure chain: each node one rank deeper than its producer
+    expect(nodes.map((n) => n.y)).toEqual([...nodes.map((n) => n.y)].sort((a, b) => a - b));
+    expect(edges.length).toBe(5); // 5 tensor edges between the 6 chained ops
+    expect(nodes[0].weights).toEqual(['conv.weight']);
+  });
+
+  it('throws a clear error on non-onnx bytes', async () => {
+    const { parseOnnx } = await import('../extension/render-onnx.js');
+    expect(() => parseOnnx(fixture('model.gguf'))).toThrow();
+  });
+});

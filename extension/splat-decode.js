@@ -4,7 +4,7 @@
 // .ply, the PlayCanvas/SuperSplat COMPRESSED .ply (chunk + packed_* uints, what
 // splat-transform emits), and the .splattie bundle.
 import { unzip, toBuffer } from './unzip.js';
-import { gunzipSync } from './vendor/fflate.esm.js';
+import { gunzipSync, zstdDecompress } from './vendor/fflate.esm.js';
 
 const C0 = 0.28209479177387814; // SH band-0 factor, f_dc -> base color
 const MAX_SPLATS = 800000; // ponytail: subsample beyond this to keep the sort snappy
@@ -226,25 +226,21 @@ function fromHalf(h) {
   return (s ? -1 : 1) * Math.pow(2, e - 15) * (1 + f / 1024);
 }
 
-// Niantic .spz v1-3: the whole file is gzip; inside, a 16-byte header then
-// struct-of-arrays: centers, alphas(u8), colors(u8 rgb), scales(u8 log), quats,
-// SH. The isotropic preview stops reading after scales — quats/SH never parsed.
-// Layout and constants follow Spark's SpzReader (the reference implementation).
+// Niantic .spz. v1-3: whole file gzipped; inside, a 16-byte header then
+// struct-of-arrays. v4: plaintext 32-byte header + TOC + one independent zstd
+// frame per attribute stream, fixed order positions/alphas/colors/scales/
+// rotations/SH with empty streams omitted (per nianticlabs/spz load-spz.cc).
+// The per-attribute encodings are IDENTICAL across v1-4 — only the container
+// changed — so both paths feed one decode loop. The isotropic preview never
+// touches rotations/SH; for v4 those frames aren't even decompressed.
 export function parseSpz(buf) {
-  const b = gunzipSync(new Uint8Array(buf));
-  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
-  if (dv.getUint32(0, true) !== 0x5053474e) throw new Error('not an .spz file (bad magic)');
-  const version = dv.getUint32(4, true);
-  if (version < 1 || version > 3)
-    throw new Error('.spz version ' + version + ' not supported (v1-3 only)');
-  const total = dv.getUint32(8, true);
-  const fractionalBits = b[13];
-  const centersOff = 16;
-  const centerBytes = version === 1 ? 6 : 9;
-  const alphasOff = centersOff + total * centerBytes;
-  const colorsOff = alphasOff + total;
-  const scalesOff = colorsOff + total * 3;
-  if (scalesOff + total * 3 > b.length) throw new Error('.spz data truncated');
+  const raw = new Uint8Array(buf);
+  const plainMagic = new DataView(buf, 0, Math.min(8, buf.byteLength));
+  const attrs =
+    buf.byteLength >= 8 && plainMagic.getUint32(0, true) === 0x5053474e
+      ? spzV4Streams(raw)
+      : spzV13Streams(gunzipSync(raw));
+  const { total, fractionalBits, centers, centerBytes, alphas, colors, scales } = attrs;
 
   const step = Math.max(1, Math.ceil(total / MAX_SPLATS));
   const count = Math.floor(total / step);
@@ -253,28 +249,110 @@ export function parseSpz(buf) {
   const size = new Float32Array(count);
   const fixed = 1 << fractionalBits;
   const colScale = C0 / 0.15; // Spark: c = (byte/255 - 0.5) * (C0/0.15) + 0.5
+  const cdv = new DataView(centers.buffer, centers.byteOffset, centers.byteLength);
   for (let i = 0; i < count; i++) {
     const r = i * step;
-    if (version === 1) {
-      const o = centersOff + r * 6;
-      pos[i * 3] = fromHalf(dv.getUint16(o, true));
-      pos[i * 3 + 1] = fromHalf(dv.getUint16(o + 2, true));
-      pos[i * 3 + 2] = fromHalf(dv.getUint16(o + 4, true));
+    if (centerBytes === 6) {
+      const o = r * 6;
+      pos[i * 3] = fromHalf(cdv.getUint16(o, true));
+      pos[i * 3 + 1] = fromHalf(cdv.getUint16(o + 2, true));
+      pos[i * 3 + 2] = fromHalf(cdv.getUint16(o + 4, true));
     } else {
-      const o = centersOff + r * 9;
+      const o = r * 9;
       for (let d = 0; d < 3; d++) {
-        const u = b[o + d * 3] | (b[o + d * 3 + 1] << 8) | (b[o + d * 3 + 2] << 16);
+        const u =
+          centers[o + d * 3] | (centers[o + d * 3 + 1] << 8) | (centers[o + d * 3 + 2] << 16);
         pos[i * 3 + d] = ((u << 8) >> 8) / fixed; // sign-extend 24-bit
       }
     }
-    col[i * 4] = clamp01((b[colorsOff + r * 3] / 255 - 0.5) * colScale + 0.5);
-    col[i * 4 + 1] = clamp01((b[colorsOff + r * 3 + 1] / 255 - 0.5) * colScale + 0.5);
-    col[i * 4 + 2] = clamp01((b[colorsOff + r * 3 + 2] / 255 - 0.5) * colScale + 0.5);
-    col[i * 4 + 3] = b[alphasOff + r] / 255;
-    const so = scalesOff + r * 3;
-    size[i] = Math.exp(Math.max(b[so], b[so + 1], b[so + 2]) / 16 - 10);
+    col[i * 4] = clamp01((colors[r * 3] / 255 - 0.5) * colScale + 0.5);
+    col[i * 4 + 1] = clamp01((colors[r * 3 + 1] / 255 - 0.5) * colScale + 0.5);
+    col[i * 4 + 2] = clamp01((colors[r * 3 + 2] / 255 - 0.5) * colScale + 0.5);
+    col[i * 4 + 3] = alphas[r] / 255;
+    size[i] = Math.exp(Math.max(scales[r * 3], scales[r * 3 + 1], scales[r * 3 + 2]) / 16 - 10);
   }
   return { count, pos, col, size };
+}
+
+// v1-3 body: 16-byte header then contiguous struct-of-arrays.
+function spzV13Streams(b) {
+  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  if (dv.getUint32(0, true) !== 0x5053474e) throw new Error('not an .spz file (bad magic)');
+  const version = dv.getUint32(4, true);
+  if (version < 1 || version > 3)
+    throw new Error('.spz version ' + version + ' not supported here');
+  const total = dv.getUint32(8, true);
+  const centerBytes = version === 1 ? 6 : 9;
+  const centersOff = 16;
+  const alphasOff = centersOff + total * centerBytes;
+  const colorsOff = alphasOff + total;
+  const scalesOff = colorsOff + total * 3;
+  if (scalesOff + total * 3 > b.length) throw new Error('.spz data truncated');
+  return {
+    total,
+    fractionalBits: b[13],
+    centerBytes,
+    centers: b.subarray(centersOff, alphasOff),
+    alphas: b.subarray(alphasOff, colorsOff),
+    colors: b.subarray(colorsOff, scalesOff),
+    scales: b.subarray(scalesOff, scalesOff + total * 3),
+  };
+}
+
+// v4 container: 32-byte plaintext header, TOC of {u64 compressed, u64
+// uncompressed} at tocByteOffset, then back-to-back zstd frames in attribute
+// order with zero-size attributes omitted from both TOC and numStreams.
+function spzV4Streams(raw) {
+  const dv = new DataView(raw.buffer, raw.byteOffset, raw.byteLength);
+  const version = dv.getUint32(4, true);
+  if (version !== 4) throw new Error('.spz version ' + version + ' not supported (v1-4 only)');
+  const total = dv.getUint32(8, true);
+  const shDegree = raw[12];
+  const fractionalBits = raw[13];
+  const numStreams = raw[15];
+  const toc = dv.getUint32(16, true);
+  const SH_DIM = { 0: 0, 1: 3, 2: 8, 3: 15, 4: 24 };
+  // expected uncompressed sizes, fixed attribute order; 0 = stream omitted
+  const expected = [
+    total * 9,
+    total,
+    total * 3,
+    total * 3,
+    total * 4,
+    total * 3 * (SH_DIM[shDegree] ?? 0),
+  ];
+  const out = [];
+  let entry = toc;
+  let data = toc + numStreams * 16;
+  let seen = 0;
+  for (const size of expected) {
+    if (size === 0) {
+      out.push(null);
+      continue;
+    }
+    if (seen++ >= numStreams) throw new Error('.spz v4 stream table truncated');
+    const compressed = Number(dv.getBigUint64(entry, true));
+    const uncompressed = Number(dv.getBigUint64(entry + 8, true));
+    if (uncompressed !== size) throw new Error('.spz v4 stream size mismatch');
+    // rotations and SH are never used by the isotropic preview — skip the
+    // decompression entirely, not just the parse
+    out.push(
+      out.length >= 4
+        ? null
+        : zstdDecompress(raw.subarray(data, data + compressed), new Uint8Array(size))
+    );
+    entry += 16;
+    data += compressed;
+  }
+  return {
+    total,
+    fractionalBits,
+    centerBytes: 9,
+    centers: out[0],
+    alphas: out[1],
+    colors: out[2],
+    scales: out[3],
+  };
 }
 
 // mkkellogg .ksplat: 4096-byte header, 1024-byte section headers, then per

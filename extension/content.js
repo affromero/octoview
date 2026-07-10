@@ -14,7 +14,7 @@ const BTN_ID = 'octoview-btn';
 const PANE_ID = 'octoview-pane';
 const THREE_EXTS = ['.glb', '.gltf', '.obj', '.ply', '.pcd'];
 const ARRAY_EXTS = ['.npy', '.npz'];
-const TABLE_EXTS = ['.parquet'];
+const TABLE_EXTS = ['.parquet', '.arrow', '.feather', '.ipc'];
 const MODEL_EXTS = ['.safetensors', '.gguf'];
 const IMAGE_EXTS = ['.exr', '.hdr', '.tif', '.tiff'];
 const SPLAT_EXTS = ['.splat', '.splattie', '.spz', '.ksplat', '.sog'];
@@ -226,6 +226,12 @@ async function render(pane, buf, ext) {
     pane.style.overflow = 'auto';
     const { renderTable } = await loadModule('render-table.js');
     await renderTable(buf, pane, ext);
+  } else if (ext === '.onnx') {
+    pane.classList.add('ov-scroll');
+    pane.style.maxHeight = '82vh';
+    pane.style.overflow = 'auto';
+    const { renderOnnx } = await loadModule('render-onnx.js');
+    renderOnnx(buf, pane);
   } else if (MODEL_EXTS.includes(ext)) {
     pane.classList.add('ov-scroll');
     pane.style.maxHeight = '82vh';
