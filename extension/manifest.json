@@ -2,7 +2,13 @@
   "manifest_version": 3,
   "name": "octoview",
   "version": "0.1.0",
-  "description": "Preview HTML reports, notebooks, 3D/splats, arrays, tables, models and HDR images inline on private GitHub repos.",
+  "description": "Preview 3D splats, notebooks, HTML reports, arrays, tables and models inline on GitHub, private repos included.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "content_scripts": [
     {
       "matches": ["https://github.com/*"],

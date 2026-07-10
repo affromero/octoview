@@ -19,7 +19,9 @@ node scripts/appicon.mjs "$ICONSET"
 xcodebuild -project Safari/octoview/octoview.xcodeproj \
   -scheme octoview -configuration Release \
   -archivePath build/octoview.xcarchive \
-  DEVELOPMENT_TEAM="$TEAM_ID" -allowProvisioningUpdates archive
+  DEVELOPMENT_TEAM="$TEAM_ID" \
+  INFOPLIST_KEY_LSApplicationCategoryType=public.app-category.developer-tools \
+  -allowProvisioningUpdates archive
 
 echo "archive at build/octoview.xcarchive — open in Xcode Organizer to upload,"
 echo "or: xcodebuild -exportArchive -archivePath build/octoview.xcarchive \\"
