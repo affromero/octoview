@@ -56,6 +56,15 @@ JS
 npx esbuild build/hyparquet.entry.mjs --bundle --format=esm --minify \
   --outfile=extension/vendor/hyparquet.esm.js
 
+# flechette (@uwdata/flechette): zero-dep Arrow IPC reader (BSD-3), far smaller
+# than apache-arrow's tree-shake-resistant bundle. Feeds render-table for
+# .arrow/.feather/.ipc.
+cat > build/flechette.entry.mjs <<'JS'
+export { tableFromIPC } from '@uwdata/flechette';
+JS
+npx esbuild build/flechette.entry.mjs --bundle --format=esm --minify \
+  --outfile=extension/vendor/flechette.esm.js
+
 # plotly (cartesian traces: scatter/bar/histogram/heatmap/box/contour/pie) as an
 # ES module, lazy-imported by content.js only when a notebook output carries a
 # Plotly MIME bundle.
