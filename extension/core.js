@@ -25,6 +25,7 @@
     '.splattie',
     '.spz',
     '.ksplat',
+    '.sog',
   ];
 
   const extname = (name) => {

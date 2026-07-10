@@ -17,7 +17,7 @@ const ARRAY_EXTS = ['.npy', '.npz'];
 const TABLE_EXTS = ['.parquet'];
 const MODEL_EXTS = ['.safetensors', '.gguf'];
 const IMAGE_EXTS = ['.exr', '.hdr', '.tif', '.tiff'];
-const SPLAT_EXTS = ['.splat', '.splattie', '.spz', '.ksplat'];
+const SPLAT_EXTS = ['.splat', '.splattie', '.spz', '.ksplat', '.sog'];
 const MAX_PREVIEW_BYTES = 64 * 1024 * 1024;
 const MAX_MODEL_BYTES = 32 * 1024 * 1024;
 
@@ -318,9 +318,8 @@ function reportFrame(html) {
 // the one context whose CSP allows Spark's worker + WASM): a static splat goes to
 // the Spark viewer; a rigged .splattie goes to the interactive splattie-widget
 // viewer. If the frame is blocked or the viewer cannot start (no beacon / error /
-// timeout), fall back to the main-thread renderer. .spz/.ksplat have no main-thread
-// decoder, so the viewer is the only path; if it fails, show the reason.
-const SPARK_ONLY = ['.spz', '.ksplat'];
+// timeout), every splat format falls back to the main-thread renderer —
+// splat-decode.js covers .splat, 3DGS .ply, .splattie, .spz, .ksplat and .sog.
 
 async function splatFrame(buf, ext) {
   const splattie = ext === '.splattie';
@@ -344,16 +343,11 @@ async function splatFrame(buf, ext) {
     mount.className = 'ov-fill';
     mount.style.height = '78vh';
     f.replaceWith(mount);
-    if (SPARK_ONLY.includes(ext)) {
-      msg(
-        mount,
-        'Spark could not render this ' +
-          ext +
-          (sparkError ? ': ' + sparkError : ' (extension frame did not respond)')
+    if (sparkError)
+      console.warn(
+        '[octoview] Spark viewer failed (' + sparkError + '), using main-thread renderer'
       );
-    } else {
-      loadModule('render-splat.js').then(({ renderSplat }) => renderSplat(buf, mount, ext));
-    }
+    loadModule('render-splat.js').then(({ renderSplat }) => renderSplat(buf, mount, ext));
   }
   function onMsg(e) {
     if (e.source !== f.contentWindow || !e.data) return;

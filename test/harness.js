@@ -59,7 +59,7 @@ try {
   } else if (ext === '.exr' || ext === '.hdr' || ext === '.tif' || ext === '.tiff') {
     const { renderImage } = await import('/extension/render-image.js');
     renderImage(buf, mount, ext);
-  } else if (ext === '.splat' || ext === '.splattie') {
+  } else if (['.splat', '.splattie', '.spz', '.ksplat', '.sog'].includes(ext)) {
     const { renderSplat } = await import('/extension/render-splat.js');
     await renderSplat(buf, mount, ext);
   } else if (ext === '.ply') {
