@@ -1,25 +1,43 @@
-// octoview tabular renderer, lazy-imported inline for .parquet. hyparquet is pure
-// JS (no workers) and reads the file bytes directly, so it is WebKit safe. Shows
-// the schema line plus the first rows as a scrollable table.
+// octoview tabular renderer, lazy-imported inline for .parquet (hyparquet) and
+// .arrow/.feather/.ipc (flechette). Both are pure JS (no workers), WebKit safe.
+// Shows the schema line plus the first rows as a scrollable table.
 import { parquetReadObjects, parquetMetadata } from './vendor/hyparquet.esm.js';
+import { tableFromIPC } from './vendor/flechette.esm.js';
 
 const LIMIT = 200;
+const ARROW_EXTS = ['.arrow', '.feather', '.ipc'];
 
-export async function renderTable(buf, mount, _ext) {
+async function readRows(buf, ext) {
+  if (ARROW_EXTS.includes(ext)) {
+    const table = tableFromIPC(new Uint8Array(buf));
+    const totalRows = table.numRows;
+    const names = table.names;
+    const rows = [];
+    const limit = Math.min(LIMIT, totalRows);
+    const cols = names.map((n) => table.getChild(n));
+    for (let i = 0; i < limit; i++)
+      rows.push(Object.fromEntries(names.map((n, c) => [n, cols[c].at(i)])));
+    return { totalRows, rows };
+  }
+  const meta = parquetMetadata(buf);
+  const totalRows = Number(meta.num_rows);
+  const file = {
+    byteLength: buf.byteLength,
+    slice: (s, e) => buf.slice(s, e ?? buf.byteLength),
+  };
+  const rows = await parquetReadObjects({
+    metadata: meta,
+    file,
+    rowStart: 0,
+    rowEnd: Math.min(LIMIT, totalRows),
+  });
+  return { totalRows, rows };
+}
+
+export async function renderTable(buf, mount, ext) {
   mount.textContent = '';
   try {
-    const meta = parquetMetadata(buf);
-    const totalRows = Number(meta.num_rows);
-    const file = {
-      byteLength: buf.byteLength,
-      slice: (s, e) => buf.slice(s, e ?? buf.byteLength),
-    };
-    const rows = await parquetReadObjects({
-      metadata: meta,
-      file,
-      rowStart: 0,
-      rowEnd: Math.min(LIMIT, totalRows),
-    });
+    const { totalRows, rows } = await readRows(buf, ext);
     const cols = rows.length ? Object.keys(rows[0]) : [];
 
     const info = document.createElement('div');

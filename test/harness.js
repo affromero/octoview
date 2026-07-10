@@ -50,9 +50,12 @@ try {
   } else if (ext === '.npy' || ext === '.npz') {
     const { renderArray } = await import('/extension/render-array.js');
     await renderArray(buf, mount, ext);
-  } else if (ext === '.parquet') {
+  } else if (['.parquet', '.arrow', '.feather', '.ipc'].includes(ext)) {
     const { renderTable } = await import('/extension/render-table.js');
     await renderTable(buf, mount, ext);
+  } else if (ext === '.onnx') {
+    const { renderOnnx } = await import('/extension/render-onnx.js');
+    renderOnnx(buf, mount);
   } else if (ext === '.safetensors' || ext === '.gguf') {
     const { renderModel } = await import('/extension/render-model.js');
     renderModel(buf, mount, ext);

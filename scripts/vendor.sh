@@ -56,6 +56,15 @@ JS
 npx esbuild build/hyparquet.entry.mjs --bundle --format=esm --minify \
   --outfile=extension/vendor/hyparquet.esm.js
 
+# flechette (@uwdata/flechette): zero-dep Arrow IPC reader (BSD-3), far smaller
+# than apache-arrow's tree-shake-resistant bundle. Feeds render-table for
+# .arrow/.feather/.ipc.
+cat > build/flechette.entry.mjs <<'JS'
+export { tableFromIPC } from '@uwdata/flechette';
+JS
+npx esbuild build/flechette.entry.mjs --bundle --format=esm --minify \
+  --outfile=extension/vendor/flechette.esm.js
+
 # plotly (cartesian traces: scatter/bar/histogram/heatmap/box/contour/pie) as an
 # ES module, lazy-imported by content.js only when a notebook output carries a
 # Plotly MIME bundle.
@@ -80,12 +89,14 @@ JS
 npx esbuild build/spark.entry.mjs --bundle --format=esm --minify \
   --outfile=extension/vendor/spark.esm.js
 
-# fflate: pure-JS zip/gzip. unzipSync feeds unzip.js (.npz/.splattie/.sog
-# bundles); gunzipSync feeds the .spz decoder (whole-file gzip wrapper).
+# fflate + fzstd: pure-JS zip/gzip/zstd. unzipSync feeds unzip.js
+# (.npz/.splattie/.sog bundles); gunzipSync feeds the .spz v1-3 decoder (gzip
+# wrapper); zstdDecompress feeds the .spz v4 decoder (per-attribute frames).
 # ponytail: decoders are hand-written in splat-decode.js — reusing Spark's was
 # tried and rejected: its bundle doesn't tree-shake (5MB for SpzReader alone).
 cat > build/fflate.entry.mjs <<'JS'
 export { unzipSync, gunzipSync } from 'fflate';
+export { decompress as zstdDecompress } from 'fzstd';
 JS
 npx esbuild build/fflate.entry.mjs --bundle --format=esm --minify \
   --outfile=extension/vendor/fflate.esm.js
