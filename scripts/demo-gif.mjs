@@ -12,7 +12,8 @@ import { join } from 'node:path';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const EXT = join(ROOT, 'build', 'chrome');
-const SAMPLE = 'capybara.splat';
+const SAMPLE = 'capybara.ply';
+const SIZE = '4.1 MB';
 const W = 1200;
 const H = 720;
 
@@ -43,7 +44,7 @@ const blobPage = `<!doctype html><html lang="en"><head><meta charset="utf-8"><st
   <div class="filebar"><span class="branch">&#8942;&#8942; main</span>
     <div class="path"><span>octoview / samples /</span> <b>${SAMPLE}</b></div></div>
   <div class="box">
-    <div class="toolbar"><span class="meta">2.8 MB</span>
+    <div class="toolbar"><span class="meta">${SIZE}</span>
       <ul class="seg">
         <li><a href="https://github.com/affromero/octoview/raw/main/samples/${SAMPLE}">Raw</a></li>
         <li><a href="https://github.com/affromero/octoview/blame/main/samples/${SAMPLE}">Blame</a></li>
@@ -98,7 +99,30 @@ if (box) {
   }
   await page.mouse.up();
 }
-await page.waitForTimeout(900);
+await page.waitForTimeout(500);
+
+// Play with the Opacity slider: fade the splat down and back up so the live
+// control is visible (the thumb moves and the render updates each step).
+const opacity = page
+  .locator('#octoview-pane label.ov3d-slider', { hasText: 'Opacity' })
+  .locator('input[type="range"]');
+const setOpacity = (v) =>
+  opacity.evaluate((el, val) => {
+    el.value = String(val);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }, v);
+if (await opacity.count()) {
+  for (let v = 1; v >= 0.28; v -= 0.03) {
+    await setOpacity(v);
+    await page.waitForTimeout(45);
+  }
+  await page.waitForTimeout(250);
+  for (let v = 0.28; v <= 1; v += 0.03) {
+    await setOpacity(v);
+    await page.waitForTimeout(45);
+  }
+}
+await page.waitForTimeout(700);
 await ctx.close();
 
 // webm -> optimized GIF
