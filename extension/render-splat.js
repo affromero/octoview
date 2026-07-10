@@ -13,6 +13,8 @@ export async function renderSplat(buf, mount, ext) {
   ensureStyle();
   mount.style.position = 'relative';
   try {
+    if (ext === '.spz' || ext === '.ksplat')
+      throw new Error(ext + ' needs the Spark renderer (unavailable here)');
     const splat =
       ext === '.splat'
         ? parseSplatBin(buf)

@@ -16,6 +16,7 @@
       "resources": [
         "viewer.html",
         "splat-viewer.html",
+        "splat-viewer.js",
         "render3d.js",
         "render-array.js",
         "render-table.js",
