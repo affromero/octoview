@@ -4,10 +4,35 @@
 // .ply, the PlayCanvas/SuperSplat COMPRESSED .ply (chunk + packed_* uints, what
 // splat-transform emits), and the .splattie bundle.
 import { unzip, toBuffer } from './unzip.js';
-import { gunzipSync, zstdDecompress } from './vendor/fflate.esm.js';
+import { zstdDecompress, Gunzip } from './vendor/fflate.esm.js';
 
 const C0 = 0.28209479177387814; // SH band-0 factor, f_dc -> base color
 const MAX_SPLATS = 800000; // ponytail: subsample beyond this to keep the sort snappy
+// Untrusted .spz files decompress on the main thread; cap the inflated size so a
+// gzip/zstd bomb (a tiny file expanding to gigabytes) cannot OOM the tab. 256MiB
+// is well past any real capture yet survivable.
+const SPZ_MAX_BYTES = 256 * 1024 * 1024;
+
+// gunzip with a running output cap: a bomb aborts mid-stream instead of after a
+// multi-GB allocation. fflate's Gunzip calls ondata synchronously during push,
+// so a throw here propagates out.
+function gunzipCapped(raw, cap) {
+  const chunks = [];
+  let size = 0;
+  const g = new Gunzip((chunk) => {
+    size += chunk.length;
+    if (size > cap) throw new Error('.spz gzip stream exceeds the ' + (cap >> 20) + 'MiB limit');
+    chunks.push(chunk.slice()); // ondata may reuse its buffer; copy
+  });
+  g.push(raw, true);
+  const out = new Uint8Array(size);
+  let o = 0;
+  for (const c of chunks) {
+    out.set(c, o);
+    o += c.length;
+  }
+  return out;
+}
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const TSIZE = {
   char: 1,
@@ -239,7 +264,7 @@ export function parseSpz(buf) {
   const attrs =
     buf.byteLength >= 8 && plainMagic.getUint32(0, true) === 0x5053474e
       ? spzV4Streams(raw)
-      : spzV13Streams(gunzipSync(raw));
+      : spzV13Streams(gunzipCapped(raw, SPZ_MAX_BYTES));
   const { total, fractionalBits, centers, centerBytes, alphas, colors, scales } = attrs;
 
   const step = Math.max(1, Math.ceil(total / MAX_SPLATS));
@@ -307,6 +332,9 @@ function spzV4Streams(raw) {
   const version = dv.getUint32(4, true);
   if (version !== 4) throw new Error('.spz version ' + version + ' not supported (v1-4 only)');
   const total = dv.getUint32(8, true);
+  // total is an unvalidated header field; the positions stream alone is total*9
+  // bytes and gets allocated up front, so cap it before trusting it.
+  if (total * 9 > SPZ_MAX_BYTES) throw new Error('.spz v4 declares too many points');
   const shDegree = raw[12];
   const fractionalBits = raw[13];
   const numStreams = raw[15];
@@ -331,9 +359,11 @@ function spzV4Streams(raw) {
       continue;
     }
     if (seen++ >= numStreams) throw new Error('.spz v4 stream table truncated');
+    if (entry + 16 > raw.length) throw new Error('.spz v4 TOC out of bounds');
     const compressed = Number(dv.getBigUint64(entry, true));
     const uncompressed = Number(dv.getBigUint64(entry + 8, true));
     if (uncompressed !== size) throw new Error('.spz v4 stream size mismatch');
+    if (data + compressed > raw.length) throw new Error('.spz v4 stream out of bounds');
     // rotations and SH are never used by the isotropic preview — skip the
     // decompression entirely, not just the parse
     out.push(
@@ -462,10 +492,17 @@ export async function parseSog(buf, decodeImage) {
   const meta = JSON.parse(new TextDecoder().decode(mf));
   if (!('version' in meta)) throw new Error('.sog v1 (pre-codebook) not supported');
   if (meta.version !== 2) throw new Error('.sog version ' + meta.version + ' not supported');
+  const total = meta.count;
+  if (!Number.isInteger(total) || total < 0 || total > 100_000_000)
+    throw new Error('.sog declares an implausible splat count');
+  // Each data texture must hold one RGBA texel per splat; a file whose count
+  // exceeds its images would index past the pixel arrays and read NaN garbage.
   const img = async (name) => {
     const entry = files.get(name);
     if (!entry) throw new Error('.sog is missing ' + name);
-    return (await decodeImage(entry)).data;
+    const { data } = await decodeImage(entry);
+    if (data.length < total * 4) throw new Error('.sog image ' + name + ' is smaller than count');
+    return data;
   };
   const [lo, hi, scales, sh0] = await Promise.all([
     img(meta.means.files[0]),
@@ -473,7 +510,6 @@ export async function parseSog(buf, decodeImage) {
     img(meta.scales.files[0]),
     img(meta.sh0.files[0]),
   ]);
-  const total = meta.count;
   const { mins, maxs } = meta.means;
   const scaleLut = meta.scales.codebook.map((x) => Math.exp(x));
   const colLut = meta.sh0.codebook.map((x) => clamp01(C0 * x + 0.5));
@@ -553,14 +589,23 @@ export function parseLcc(metaBytes, indexBytes, dataBytes) {
     }
   }
 
-  const count = records.reduce((total, record) => total + record.count, 0);
+  const total = records.reduce((sum, record) => sum + record.count, 0);
+  // A record's count is bounds-checked against data.bin individually, but many
+  // records can point at the SAME offset — so a crafted index.bin could sum to a
+  // count far larger than data.bin holds and OOM the tab. Real (non-overlapping)
+  // LODs can't sum past data.bin/32 splats; refuse anything beyond that, then
+  // subsample to MAX_SPLATS like every other splat decoder.
+  if (total > Math.floor(dataBytes.byteLength / 32))
+    throw new Error('LCC index declares more splats than data.bin holds');
+  const count = Math.min(total, MAX_SPLATS);
   const pos = new Float32Array(count * 3);
   const col = new Float32Array(count * 4);
   const size = new Float32Array(count);
   const data = dataView(dataBytes);
   let out = 0;
   for (const record of records) {
-    for (let i = 0; i < record.count; i++, out++) {
+    if (out >= count) break;
+    for (let i = 0; i < record.count && out < count; i++, out++) {
       const offset = record.dataOffset + i * 32;
       pos[out * 3] = data.getFloat32(offset, true);
       pos[out * 3 + 1] = data.getFloat32(offset + 4, true);
