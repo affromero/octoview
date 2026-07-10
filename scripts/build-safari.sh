@@ -6,6 +6,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 TEAM_ID=2HVQQ4W769
+# Version comes from the manifest (single source of truth); the build number is
+# the git commit count, which always increases so App Store accepts each upload.
+VERSION="$(node -p "require('./extension/manifest.json').version")"
+BUILD="$(git rev-list --count HEAD)"
 
 xcrun safari-web-extension-converter extension/ \
   --macos-only --bundle-identifier co.afromero.octoview \
@@ -20,8 +24,11 @@ xcodebuild -project Safari/octoview/octoview.xcodeproj \
   -scheme octoview -configuration Release \
   -archivePath build/octoview.xcarchive \
   DEVELOPMENT_TEAM="$TEAM_ID" \
+  MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
   INFOPLIST_KEY_LSApplicationCategoryType=public.app-category.developer-tools \
   -allowProvisioningUpdates archive
+
+echo "built version $VERSION (build $BUILD)"
 
 echo "archive at build/octoview.xcarchive — open in Xcode Organizer to upload,"
 echo "or: xcodebuild -exportArchive -archivePath build/octoview.xcarchive \\"
