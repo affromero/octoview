@@ -79,18 +79,6 @@ export function render3D(buf, mount, ext) {
     });
     buildPanel(mount, pointsMat, maxDim, (on) => (gizmoOn = on));
 
-    renderer.autoClear = false;
-    const clock = new THREE.Clock();
-    (function loop() {
-      requestAnimationFrame(loop);
-      const dt = clock.getDelta();
-      if (viewHelper.animating) viewHelper.update(dt);
-      controls.update();
-      renderer.clear();
-      renderer.render(scene, camera);
-      if (gizmoOn) viewHelper.render(renderer);
-    })();
-
     const resize = () => {
       const W = mount.clientWidth || w;
       const H = mount.clientHeight || h;
@@ -99,6 +87,26 @@ export function render3D(buf, mount, ext) {
       camera.updateProjectionMatrix();
     };
     window.addEventListener('resize', resize);
+
+    renderer.autoClear = false;
+    const clock = new THREE.Clock();
+    (function loop() {
+      // Toggling Preview off removes the pane/canvas from the DOM; tear down the
+      // loop and GPU context so repeated opens do not exhaust WebGL contexts.
+      if (!renderer.domElement.isConnected) {
+        window.removeEventListener('resize', resize);
+        renderer.dispose();
+        renderer.forceContextLoss();
+        return;
+      }
+      requestAnimationFrame(loop);
+      const dt = clock.getDelta();
+      if (viewHelper.animating) viewHelper.update(dt);
+      controls.update();
+      renderer.clear();
+      renderer.render(scene, camera);
+      if (gizmoOn) viewHelper.render(renderer);
+    })();
   };
 
   try {

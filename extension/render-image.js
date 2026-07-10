@@ -48,17 +48,21 @@ function drawLDR(tex, mount) {
 
 function drawHDR(tex, mount, label) {
   const { data, width, height } = tex;
-  // Gray-world auto exposure: aim average luminance at mid-gray.
+  // Gray-world auto exposure: aim average luminance at mid-gray. Ignore negative
+  // and non-finite samples (valid in EXR) so the exposure stays finite.
   let sum = 0;
   const n = width * height;
   const step = Math.max(1, Math.floor(n / 100000));
   let counted = 0;
   for (let i = 0; i < n; i += step) {
     const o = i * 4;
-    sum += 0.2126 * data[o] + 0.7152 * data[o + 1] + 0.0722 * data[o + 2];
-    counted++;
+    const lum = 0.2126 * data[o] + 0.7152 * data[o + 1] + 0.0722 * data[o + 2];
+    if (isFinite(lum) && lum > 0) {
+      sum += lum;
+      counted++;
+    }
   }
-  const avg = sum / (counted || 1);
+  const avg = counted ? sum / counted : 0.18;
   const autoEV = Math.log2(0.18 / (avg + 1e-6));
 
   meta(mount, `${width} × ${height}  ·  ${label}  ·  linear float`);
@@ -77,6 +81,7 @@ function drawHDR(tex, mount, label) {
       const o = i * 4;
       for (let c = 0; c < 3; c++) {
         let v = data[o + c] * exposure;
+        v = v > 0 && isFinite(v) ? v : 0; // clamp negatives / NaN before tone mapping
         v = v / (1 + v); // Reinhard
         out.data[o + c] = Math.pow(v, 1 / 2.2) * 255;
       }

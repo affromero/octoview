@@ -34,9 +34,9 @@ try {
   } else if (ext === '.exr' || ext === '.hdr' || ext === '.tif' || ext === '.tiff') {
     const { renderImage } = await import('/extension/render-image.js');
     renderImage(buf, mount, ext);
-  } else if (ext === '.splat') {
+  } else if (ext === '.splat' || ext === '.splattie') {
     const { renderSplat } = await import('/extension/render-splat.js');
-    renderSplat(buf, mount, ext);
+    await renderSplat(buf, mount, ext);
   } else if (ext === '.ply') {
     const { isPlySplat, renderSplat } = await import('/extension/render-splat.js');
     if (isPlySplat(buf)) {

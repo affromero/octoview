@@ -42,10 +42,10 @@ renderer. Status is **verified in WebKit (Safari's engine) by an automated rende
 | **HTML reports / plots**       | `.html` `.htm`                                     | sandboxed frame, inline; static HTML content                              |   ✅   |
 | **Jupyter notebooks**          | `.ipynb`                                           | keeps the interactive outputs GitHub strips                               |   ✅   |
 | **3D meshes and point clouds** | `.glb` `.gltf` `.obj` `.ply` `.pcd`                | three.js loaders (parsed on the main thread), gizmo + point sliders       |   ✅   |
-| **Gaussian splats**            | `.splat` `.ply` (3DGS)                             | main-thread gaussian sprites, depth-sorted; `.ply` routed by header sniff |   ✅   |
+| **Gaussian splats**            | `.splat` `.ply` (3DGS) `.splattie`                 | main-thread gaussian sprites, depth-sorted; `.ply` routed by header sniff |   ✅   |
 | **Model graphs**               | `.safetensors` `.gguf`                             | main-thread header parse to a tensor + metadata table                     |   ✅   |
 | **Tabular data**               | `.parquet`                                         | hyparquet, sticky-header table                                            |   ✅   |
-| **Array previews**             | `.npy` `.npz`                                      | header parse to a viridis heatmap or RGB image                            |   ✅   |
+| **Array previews**             | `.npy` `.npz`                                      | viridis heatmap / RGB image, with a raw-numbers view (1-3D)               |   ✅   |
 | **Scientific images**          | `.exr` `.hdr` `.tif` `.tiff`                       | tone-mapped to a canvas with an exposure slider                           |   ✅   |
 | **More splats / graphs**       | `.spz` `.ksplat` `.sog` `.lcc` `.rad`, ONNX, Arrow | bespoke decoders (some Spark-only / worker-based) or Netron               |   🚧   |
 
@@ -69,6 +69,7 @@ Open any file below on GitHub and click **Preview** (after [installing](#develop
 | [`samples/cloud.pcd`](samples/cloud.pcd)                 | a PCD point cloud                           |
 | [`samples/head.splat`](samples/head.splat)               | a Gaussian splat (antimatter15 `.splat`)    |
 | [`samples/splat.ply`](samples/splat.ply)                 | a 3DGS Gaussian splat (PLY)                 |
+| [`samples/head.splattie`](samples/head.splattie)         | a `.splattie` bundle (base splat rendered)  |
 | [`samples/array.npy`](samples/array.npy)                 | a NumPy array as a heatmap                  |
 | [`samples/array.npz`](samples/array.npz)                 | a compressed multi-array `.npz`             |
 | [`samples/metrics.parquet`](samples/metrics.parquet)     | a Parquet table                             |
@@ -133,12 +134,14 @@ extension/
   core.js              pure and DOM logic: dispatch, URL resolve, notebook render (unit-tested)
   content.js           github.com: button, fetch with cookies, inline render pane
   render3d.js          three.js mesh and point-cloud renderer (gizmo, point sliders)
-  render-splat.js      main-thread Gaussian splat renderer (.splat, 3DGS .ply)
-  render-array.js      .npy/.npz heatmap and image
+  render-splat.js      main-thread Gaussian splat renderer (.splat, 3DGS .ply, .splattie)
+  render-array.js      .npy/.npz heatmap/image + raw-numbers view
   render-table.js      .parquet table (hyparquet)
   render-model.js      .safetensors/.gguf tensor and metadata table
   render-image.js      .exr/.hdr/.tiff tone-mapped to a canvas
-  vendor/              vendored self-contained libs (marked, three.js + loaders, hyparquet)
+  splat-decode.js      pure splat parsers (.splat, 3DGS .ply, .splattie); unit-tested
+  unzip.js             shared ZIP reader (fflate) for .npz and .splattie
+  vendor/              self-contained libs (marked, three.js + loaders, hyparquet, fflate)
 samples/               one file per type, previewable from the repo
 tests/                 vitest suite over core.js
 test/harness.html/.js  stand-in blob page that drives the inline render path

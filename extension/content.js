@@ -15,13 +15,13 @@ const ARRAY_EXTS = ['.npy', '.npz'];
 const TABLE_EXTS = ['.parquet'];
 const MODEL_EXTS = ['.safetensors', '.gguf'];
 const IMAGE_EXTS = ['.exr', '.hdr', '.tif', '.tiff'];
-const SPLAT_EXTS = ['.splat'];
+const SPLAT_EXTS = ['.splat', '.splattie'];
 
 // Cheap header sniff: a 3DGS .ply carries gaussian props; a plain .ply does not.
 // Lets us route .ply to the splat vs the mesh/point-cloud renderer without
 // loading either module first.
 function isPlySplatHead(buf) {
-  const head = new TextDecoder().decode(new Uint8Array(buf, 0, Math.min(2048, buf.byteLength)));
+  const head = new TextDecoder().decode(new Uint8Array(buf, 0, Math.min(8192, buf.byteLength)));
   return /f_dc_0/.test(head) && /scale_0/.test(head) && /rot_0/.test(head);
 }
 
@@ -64,7 +64,13 @@ async function onPreview(btn) {
   const label = btn.textContent;
   btn.textContent = 'Loading…';
   try {
-    const res = await fetch(O.pickRawUrl(document, location.href), { credentials: 'same-origin' });
+    // Model files keep their structure at the front, so range-fetch the first 32MB
+    // instead of pulling a multi-GB weights file down whole.
+    const headers = MODEL_EXTS.includes(extOf()) ? { Range: 'bytes=0-33554431' } : undefined;
+    const res = await fetch(O.pickRawUrl(document, location.href), {
+      credentials: 'same-origin',
+      headers,
+    });
     if (!res.ok) throw new Error('GitHub returned HTTP ' + res.status);
     openPane(btn, await res.arrayBuffer());
   } catch (e) {
@@ -190,10 +196,14 @@ function ensureStyle() {
     #${PANE_ID} .ov-nb-text{padding:4px 14px;margin:0 0 10px;overflow-x:auto;
       font:12.5px/1.5 ui-monospace,monospace;white-space:pre-wrap;color:#adbac7}
     #${PANE_ID} .ov-nb-err{color:#ff7b72}
-    #${PANE_ID} .ov-nb-out{width:100%;height:480px;border:1px solid #30363d;border-radius:6px;background:#fff;margin:0 0 12px}
+    #${PANE_ID} .ov-nb-out{width:100%;height:360px;border:1px solid #30363d;border-radius:6px;background:#fff;margin:0 0 12px}
     #${PANE_ID} .ov-nb-img{max-width:100%;background:#fff;border-radius:6px;margin:0 0 12px}
     #${PANE_ID} .ov-arr-meta{padding:14px 18px 6px;font:12.5px/1.5 ui-monospace,monospace;color:#adbac7}
     #${PANE_ID} .ov-arr-canvas{display:block;margin:0 18px 18px;border:1px solid #30363d;border-radius:6px}
+    #${PANE_ID} .ov-arr-tabs{display:flex;gap:6px;padding:0 18px 10px}
+    #${PANE_ID} .ov-arr-tab{font:12px -apple-system,sans-serif;padding:3px 12px;color:#c9d1d9;
+      background:#21262d;border:1px solid #30363d;border-radius:6px;cursor:pointer}
+    #${PANE_ID} .ov-arr-tab.on{background:#1f6feb;border-color:#388bfd;color:#fff}
     #${PANE_ID} .ov-tbl-meta{padding:14px 18px 8px;font:12.5px/1.5 ui-monospace,monospace;color:#adbac7}
     #${PANE_ID} .ov-tbl-scroll{overflow-x:auto;margin:0 0 16px;padding:0 18px}
     #${PANE_ID} .ov-tbl{border-collapse:collapse;font:12.5px/1.45 ui-monospace,monospace;white-space:nowrap}

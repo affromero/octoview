@@ -21,8 +21,9 @@ export default [
     },
   },
   {
-    // render*.js are ES modules (lazy-imported by the content script).
-    files: ['extension/render*.js'],
+    // These are ES modules (lazy-imported by the content script); core.js and
+    // content.js stay classic scripts.
+    files: ['extension/render*.js', 'extension/splat-decode.js', 'extension/unzip.js'],
     languageOptions: { sourceType: 'module' },
   },
   {
