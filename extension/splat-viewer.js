@@ -6,6 +6,15 @@ import { THREE, OrbitControls, SparkRenderer, SplatMesh } from './vendor/spark.e
 
 const post = (msg) => parent.postMessage(msg, '*');
 
+// Source coordinate systems (matches render3d.js). three.js is OpenGL (Y-up), so
+// each entry rotates data authored in that convention up into this view.
+const X = new THREE.Vector3(1, 0, 0);
+const CONVENTIONS = {
+  'OpenGL (Y-up)': new THREE.Quaternion(),
+  'Z-up (Blender, ROS, CAD)': new THREE.Quaternion().setFromAxisAngle(X, -Math.PI / 2),
+  'OpenCV (Y-down, Z-fwd)': new THREE.Quaternion().setFromAxisAngle(X, Math.PI),
+};
+
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.setSize(innerWidth, innerHeight);
@@ -19,8 +28,11 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 scene.add(new SparkRenderer({ renderer }));
 
-function frame(mesh) {
-  const box = new THREE.Box3().setFromObject(mesh);
+let splatMesh = null;
+
+function frame() {
+  if (!splatMesh) return;
+  const box = new THREE.Box3().setFromObject(splatMesh);
   if (box.isEmpty()) return;
   const c = box.getCenter(new THREE.Vector3());
   const s = box.getSize(new THREE.Vector3());
@@ -33,18 +45,39 @@ function frame(mesh) {
   controls.update();
 }
 
+// A Coords dropdown to reinterpret the source axes, same idea as the 3D renderer.
+function buildPanel() {
+  const panel = document.createElement('div');
+  panel.className = 'panel';
+  const label = document.createElement('label');
+  label.textContent = 'Coords';
+  const select = document.createElement('select');
+  for (const name of Object.keys(CONVENTIONS)) {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    select.appendChild(opt);
+  }
+  select.onchange = () => {
+    splatMesh.quaternion.copy(CONVENTIONS[select.value]);
+    frame();
+  };
+  label.appendChild(select);
+  panel.appendChild(label);
+  document.body.appendChild(panel);
+}
+
 addEventListener('message', async (e) => {
   if (e.origin !== 'https://github.com' || !e.data || e.data.type !== 'ov-splat') return;
   try {
-    const mesh = new SplatMesh({
+    splatMesh = new SplatMesh({
       fileBytes: new Uint8Array(e.data.bytes),
       fileName: e.data.fileName,
     });
-    await mesh.initialized;
-    // Splats are typically stored Y-down; flip 180° about X into three's Y-up.
-    mesh.quaternion.set(1, 0, 0, 0);
-    scene.add(mesh);
-    frame(mesh);
+    await splatMesh.initialized;
+    scene.add(splatMesh);
+    frame();
+    buildPanel();
     post({ type: 'ov-splat-ok' });
   } catch (err) {
     post({ type: 'ov-splat-error', error: 'SplatMesh: ' + ((err && err.message) || err) });
