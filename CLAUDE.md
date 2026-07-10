@@ -21,12 +21,17 @@ your existing GitHub session — no service, no upload, no PAT.
   markdown sanitize). **Stays free of `browser.*`** so vitest covers it.
 - `render-*.js` — lazy-imported renderers (`render3d`, `render-splat`,
   `render-array`, `render-table`, `render-model`, `render-onnx`, `render-image`).
+  `render-splat` draws TRUE anisotropic gaussians (EWA splatting) in pure WebGL2
+  on the main thread — no worker/WASM/eval/blob — so it runs under the strict CSP
+  in every browser. It builds each splat's covariance in a float data texture and
+  sorts back-to-front every frame (16-bit counting sort).
 - `splat-decode.js` — **pure** splat decoders (no DOM, no `browser.*`), so
   vitest covers them. Renderer contract: `{ count, pos:Float32[3n],
-col:Float32[4n rgba 0..1], size:Float32[n] }`, subsampled to `MAX_SPLATS`.
-- `viewer.html` / `splat-viewer.html` / `splattie-viewer.html` — extension
-  pages whose CSP octoview controls; host the live-report sandbox and the Spark
-  (WASM + worker) splat viewers.
+col:Float32[4n rgba 0..1], scale:Float32[3n] (linear std dev), quat:Float32[4n]
+(xyzw, normalized) }`, subsampled to `MAX_SPLATS`.
+- `viewer.html` — the extension page whose CSP octoview controls; hosts the
+  live-report sandbox. (There is no Spark/splat viewer page anymore — splats
+  render inline in the content script's isolated world, like the other 3D.)
 - `vendor/*` — self-contained libs, all rebuilt by `scripts/vendor.sh` from
   lockfile-pinned npm deps.
 
@@ -98,16 +103,17 @@ working on its own.
 
 ### Per-browser CSP (never merge the manifests)
 
-- Safari `extension_pages` keeps `'unsafe-inline'` (the viewer capability probe)
-  and `blob:` (Spark's inline worker); it also carries `connect-src 'none'` and
-  `object-src 'none'`.
-- Chrome/Firefox reject `'unsafe-inline'` and `blob:` outright (whole extension
-  fails to load), so the build scripts rewrite to the strict minimum
-  (`script-src 'self' 'wasm-unsafe-eval'; connect-src 'none'; object-src
-'none'`). Chrome additionally makes `viewer.html` a `sandbox` page with its own
-  `content_security_policy.sandbox` (inline allowed there); Firefox has no
-  sandbox key, so live reports fall back to static and splats to the main-thread
-  renderer, and Spark bundles are stripped (addons-linter FILE_TOO_LARGE > 5MB).
+The only CSP variation left is the live-report path; splats no longer need any
+relaxation (the native WebGL2 renderer runs in the content script's isolated
+world, bound by no extension-page CSP).
+
+- Safari `extension_pages` keeps `'unsafe-inline'` (the report viewer's inline
+  capability probe); it also carries `connect-src 'none'` and `object-src 'none'`.
+- Chrome/Firefox reject `'unsafe-inline'` outright (whole extension fails to
+  load), so the build scripts rewrite to the strict minimum (`script-src 'self';
+connect-src 'none'; object-src 'none'`). Chrome additionally makes `viewer.html`
+  a `sandbox` page with its own `content_security_policy.sandbox` (inline allowed
+  there); Firefox has no sandbox key, so live reports fall back to static.
 
 ### Accepted tradeoffs (deliberately NOT changed — don't "fix" these)
 
@@ -121,32 +127,48 @@ working on its own.
 
 ## Formats & decoders
 
-- Renderer contract everywhere: `{ count, pos, col, size }`. The sprite renderer
-  is **isotropic** — it ignores rotations and spherical harmonics, so splat
-  decoders can skip those streams entirely (don't even decompress them in spz v4).
-- Splats: `.splat`, 3DGS + compressed `.ply`, `.splattie`, `.spz` (v1-4, hand-
-  written from nianticlabs/spz — Spark's own reader can't open v4), `.ksplat`
-  (mkkellogg; scales are LINEAR, no exp), `.sog` v2 (zip of webp textures, codebook
+- Renderer contract everywhere: `{ count, pos, col, scale, quat }`. The renderer
+  draws TRUE anisotropic gaussians (oriented covariance ellipses) from the scale +
+  quaternion. Spherical harmonics are still dropped (base color only). `.splat`
+  and both `.ply` variants are fully anisotropic; `.spz`/`.ksplat`/`.sog`/`.lcc`
+  currently emit identity rotation (isotropic look) pending a per-format rotation
+  cross-check — decode their rotation streams and drop the `ponytail:` note when
+  verified against the sample render.
+- Splats: `.splat`, 3DGS + compressed `.ply`, `.spz` (v1-4, hand-written from
+  nianticlabs/spz — Spark's own reader can't open v4), `.ksplat` (mkkellogg;
+  scales are LINEAR, no exp), `.sog` v2 (zip of webp textures, codebook
   scales/colors, inverse-log means; webp decoded via WebGL2 readback with
   premultiply off — a 2D canvas corrupts the alpha-carrying data channels).
+  `.splattie` (rigged Spark widget) and `.rad` (Spark-only LOD format) are NOT
+  supported — they needed Spark, which was removed (see "Why not Spark" below).
 - `.lcc` (XGRIDS) is a MULTI-FILE container: the `.lcc` metadata blob plus sibling
   `index.bin` + `data.bin` fetched from the same GitHub directory (hence the
   `media.githubusercontent.com` host permission). `parseLcc` (in
   `splat-decode.js`) sums the LOD
   records — so it must guard against overlapping records inflating the count past
   `data.bin/32` and cap to `MAX_SPLATS` (it had neither; both added).
-- `.rad` is a Spark-native LOD format with NO main-thread decoder: it renders only
-  through the Spark viewer page, so it works in **Safari only** (Chrome/Firefox
-  block Spark's worker and show "RAD previews require the Spark viewer"). This is
-  the one format that isn't cross-browser — keep the table/footnote honest about it.
 - Tables: `.parquet` (hyparquet), `.arrow`/`.feather`/`.ipc` (flechette — chosen
   over apache-arrow, which is 8× larger and defeats tree-shaking).
 - Model graphs: `.safetensors`/`.gguf` (header tables), `.onnx` (hand-rolled
   protobuf wire reader + a longest-path SVG graph; NOT protobufjs, too heavy).
 - Fixtures are generated from real external encoders, not our own decoders (same-
   scene cross-checks catch format misreads): `@playcanvas/splat-transform` (sog,
-  spz), Spark `transcodeSpz` (spz v4), mkkellogg `create-ksplat`, pyarrow (arrow),
-  `onnx.helper` (onnx). Commit the tiny result under `samples/`.
+  spz, spz v4), mkkellogg `create-ksplat`, pyarrow (arrow), `onnx.helper` (onnx).
+  Commit the tiny result under `samples/`.
+
+### Why not Spark (why we render splats ourselves)
+
+Spark is a full Gaussian-splat renderer, but it's a ~5.7MB WASM+worker library,
+and an MV3 extension can't give it what it needs. It creates its sort worker from
+a `blob:` URL and fetches its WASM from a `data:` URL; extension-page CSPs block
+both (`connect-src 'none'`, no blob workers — Firefox WONTFIX'd blob workers with
+no exemption). So Spark silently failed to initialize in EVERY browser and splats
+fell back to an isotropic approximation. Rendering the gaussians ourselves — a
+~40-line EWA-splatting WebGL2 shader on the main thread — needs none of that: it
+runs under the strict CSP everywhere, drops a 5.7MB dependency, and works in
+Firefox too. The cost is spherical-harmonics color and the `.rad`/`.splattie`
+Spark-only formats. **Do not re-add Spark** to "improve" splat rendering; extend
+`render-splat.js` / `splat-decode.js` instead.
 
 ## Commands (the gates)
 
@@ -154,7 +176,7 @@ working on its own.
 - `npm run test:e2e` — every sample rendered in Chromium AND WebKit (the
   Safari-truth harness; a format is only "supported" when it passes here).
 - `npm run test:chrome` — the built Chrome extension loaded into real Chromium
-  (button injection, live report in the sandbox page, splat fallback).
+  (button injection, live report in the sandbox page, native splat render).
 - `npm run test:firefox` — Firefox build + `addons-linter` (AMO's validator;
   `web-ext` crashes natively on this machine — use addons-linter).
 - `npm run audit` — `npm audit --audit-level=high`.
