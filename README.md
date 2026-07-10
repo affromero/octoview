@@ -45,16 +45,16 @@ your cookies, and renders it in place. No service, no upload, no personal access
 Everything runs through one small, unit-tested core that dispatches by file extension. Each row is a
 renderer. Status is **verified in WebKit (Safari's engine) by an automated render test**.
 
-| Type                           | Extensions                                                                          | Renderer                                                                                         | Status |
-| ------------------------------ | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | :----: |
-| **HTML reports / plots**       | `.html` `.htm`                                                                      | extension viewer frame: the report's own scripts run, sandboxed; static fallback                 |   ✅   |
-| **Jupyter notebooks**          | `.ipynb`                                                                            | Plotly outputs render live from the MIME bundle; the rest GitHub strips is kept                  |   ✅   |
-| **3D meshes and point clouds** | `.glb` `.gltf` `.obj` `.ply` `.pcd`                                                 | three.js loaders (parsed on the main thread), gizmo + point sliders                              |   ✅   |
-| **Gaussian splats**            | `.splat` `.ply` (3DGS + compressed) `.splattie` `.spz` (v1-4) `.ksplat` `.sog` (v2) | main-thread gaussian sprites, depth-sorted; every format Spark reads, decoded without its worker |   ✅   |
-| **Model graphs**               | `.safetensors` `.gguf` `.onnx`                                                      | tensor + metadata tables; ONNX gets a Netron-style SVG graph of the ops                          |   ✅   |
-| **Tabular data**               | `.parquet` `.arrow` `.feather` `.ipc`                                               | hyparquet / flechette, sticky-header table                                                       |   ✅   |
-| **Array previews**             | `.npy` `.npz`                                                                       | viridis heatmap / RGB image, with a raw-numbers view (1-3D)                                      |   ✅   |
-| **Scientific images**          | `.exr` `.hdr` `.tif` `.tiff`                                                        | tone-mapped to a canvas with an exposure slider                                                  |   ✅   |
+| Type                           | Extensions                                                                                   | Renderer                                                                                | Status |
+| ------------------------------ | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | :----: |
+| **HTML reports / plots**       | `.html` `.htm`                                                                               | extension viewer frame: the report's own scripts run, sandboxed; static fallback        |   ✅   |
+| **Jupyter notebooks**          | `.ipynb`                                                                                     | Plotly outputs render live from the MIME bundle; the rest GitHub strips is kept         |   ✅   |
+| **3D meshes and point clouds** | `.glb` `.gltf` `.obj` `.ply` `.pcd`                                                          | three.js loaders (parsed on the main thread), gizmo + point sliders                     |   ✅   |
+| **Gaussian splats**            | `.splat` `.ply` (3DGS + compressed) `.splattie` `.spz` (v1-4) `.ksplat` `.sog` `.lcc` `.rad` | Spark previews RAD; LCC loads `index.bin` and `data.bin` from the same GitHub directory |   ✅   |
+| **Model graphs**               | `.safetensors` `.gguf` `.onnx`                                                               | tensor + metadata tables; ONNX gets a Netron-style SVG graph of the ops                 |   ✅   |
+| **Tabular data**               | `.parquet` `.arrow` `.feather` `.ipc`                                                        | hyparquet / flechette, sticky-header table                                              |   ✅   |
+| **Array previews**             | `.npy` `.npz`                                                                                | viridis heatmap / RGB image, with a raw-numbers view (1-3D)                             |   ✅   |
+| **Scientific images**          | `.exr` `.hdr` `.tif` `.tiff`                                                                 | tone-mapped to a canvas with an exposure slider                                         |   ✅   |
 
 > **On WebKit.** Two Safari limits shape the design. (1) Renderers parse file bytes on the main
 > thread (three.js loaders, pure-JS parsers) because Safari cannot fetch a main-thread `blob:` URL
@@ -225,7 +225,7 @@ It comes up, so here is the reasoning:
 ## Roadmap
 
 - **Firefox listing.** The AMO-ready package builds from this repo (`npm run build:firefox`, lint-clean); what remains is the listing itself and a runtime check in Gecko (Playwright cannot drive Firefox extensions, so that check is selenium/geckodriver work).
-- **More formats on demand.** `.lcc` (XGRIDS) has an open spec and an MIT reference reader, but it is a multi-file container that fits a single-blob previewer poorly — deferred until real demand. `.rad` was dropped: no public gaussian-splat spec or files exist under that name (and the extension already means Radiance scenes).
+- **More formats on demand.** LCC and RAD are supported. An LCC preview needs the `.lcc` metadata file plus its `index.bin` and `data.bin` siblings in the same GitHub directory; RAD is rendered by Spark.
 - **Other browsers and new formats: PRs welcome.** The renderer interface is a single extension-keyed dispatch, so adding a format is mostly one self-contained module plus a WebKit render test. Contributions are the fastest path to wider coverage.
 
 ## Develop

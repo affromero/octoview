@@ -27,6 +27,7 @@
         "render-onnx.js",
         "render-image.js",
         "render-splat.js",
+        "lcc-decode.js",
         "splat-decode.js",
         "unzip.js",
         "vendor/three3d.esm.js",
