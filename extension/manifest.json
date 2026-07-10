@@ -17,6 +17,7 @@
         "viewer.html",
         "splat-viewer.html",
         "splat-viewer.js",
+        "splat-boot.js",
         "splattie-viewer.html",
         "splattie-viewer.js",
         "render3d.js",

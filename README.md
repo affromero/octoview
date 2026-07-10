@@ -108,22 +108,22 @@ The dispatch, URL resolution, and notebook rendering live in
 
 octoview is a browser extension, so the closest comparison is other GitHub extensions. Nearly all of them enhance navigation or polish the UI. **None render the file's contents**, let alone ML and data formats. octoview is the one that turns a blob page into a live preview of the file itself.
 
-| Extension                                                          | What it adds                                                                                       | Renders file contents |
-| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- | :-------------------: |
-| **octoview** (this repo)                                           | Inline **Preview** of the file: reports, notebooks, 3D, splats, arrays, tables, model headers, HDR |     ✅ 19 formats     |
-| [Refined GitHub](https://github.com/refined-github/refined-github) | Hundreds of UI and workflow refinements                                                            |          ❌           |
-| [Octotree](https://www.octotree.io/)                               | Collapsible file-tree sidebar                                                                      |          ❌           |
-| [Gitako](https://github.com/EnixCoda/Gitako)                       | File-tree sidebar and fuzzy file search                                                            |          ❌           |
-| [OctoLinker](https://github.com/OctoLinker/OctoLinker)             | Makes `import`/`require` paths clickable                                                           |          ❌           |
-| [Enhanced GitHub](https://github.com/softvar/enhanced-github)      | Repo and folder size, single-file download                                                         |          ❌           |
-| [Sourcegraph](https://github.com/sourcegraph/sourcegraph)          | Code-intelligence hovers (go-to-def, references)                                                   |      source only      |
-| [GitHub File Icons](https://github.com/xxhomey19/github-file-icon) | File-type icons in listings                                                                        |          ❌           |
+| Extension                                                                 | What it adds                                                                                       | Renders file contents | Safari | Chrome | Firefox |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | :-------------------: | :----: | :----: | :-----: |
+| **octoview** (this repo)                                                  | Inline **Preview** of the file: reports, notebooks, 3D, splats, arrays, tables, model headers, HDR |     ✅ 19 formats     |   ✅   |   ✅   |   🚧    |
+| [Refined GitHub](https://github.com/refined-github/refined-github)        | Hundreds of UI and workflow refinements                                                            |          ❌           |   ✅   |   ✅   |   ✅    |
+| [Octotree](https://www.octotree.io/)                                      | Collapsible file-tree sidebar                                                                      |          ❌           |  Pro   |   ✅   |   ✅    |
+| [Gitako](https://github.com/EnixCoda/Gitako)                              | File-tree sidebar and fuzzy file search                                                            |          ❌           |   ❌   |   ✅   |   ✅    |
+| [OctoLinker](https://github.com/OctoLinker/OctoLinker)                    | Makes `import`/`require` paths clickable                                                           |          ❌           |   ✅   |   ✅   |   ✅    |
+| [Enhanced GitHub](https://github.com/softvar/enhanced-github)             | Repo and folder size, single-file download                                                         |          ❌           |   ❌   |   ✅   |   ✅    |
+| [Sourcegraph](https://sourcegraph.com/docs/integration/browser-extension) | Code-intelligence hovers (go-to-def, references)                                                   |      source only      |   ✅   |   ✅   |   ✅    |
+| [GitHub File Icons](https://github.com/homerchen19/github-file-icons)     | File-type icons in listings                                                                        |          ❌           |   ✅   |   ✅   |   ✅    |
 
-A few single-purpose viewers ship as extensions too (a Mermaid diagram preview, an STL model viewer), but none span the range octoview covers.
+The few extensions that DO render a file's contents are single-purpose and Chrome-only: a [Mermaid diagram renderer](https://chromewebstore.google.com/detail/mermaid-diagram-renderer/ahhjfofclhjllmiglebianajpmkabcbc) (largely superseded by GitHub's native Mermaid support), [three-hub](https://github.com/danielribeiro/three-hub) for 3D models, and an [ipynb viewer](https://chromewebstore.google.com/detail/ipynb-files-viewer/iohfdefnnffaejpacklikjbjhnfcmbej) for notebooks. None span the range octoview covers, and none ship on Safari.
 
 ## Roadmap
 
-- **Chrome and Firefox ports.** The MV3 content-script model is portable, so the core dispatch and renderers should move with little change. Several Safari-specific constraints also relax off WebKit: Chromium and Gecko allow a main-thread `blob:` fetch from a worker and honor sandboxed pages, so a report's own inline scripts could actually run there. Interactive plots that render static in Safari would render live in those ports.
+- **Firefox port.** The Chrome build ships from this repo (`npm run build:chrome`); Gecko should follow with little change since the MV3 content-script model is portable. As in Chrome, several Safari-specific constraints relax there, so reports' own scripts run live.
 - **More splat and graph coverage.** Promote the in-progress decoders (`.spz`, `.ksplat`, `.sog`) from experimental to verified, and add real model-graph rendering (ONNX via a Netron-style view) beyond today's tensor and metadata table.
 - **Other browsers and new formats: PRs welcome.** The renderer interface is a single extension-keyed dispatch, so adding a format is mostly one self-contained module plus a WebKit render test. Contributions are the fastest path to wider coverage.
 
@@ -134,12 +134,16 @@ No Xcode is needed for the dev loop. Safari loads the unpacked folder directly.
 1. **Develop, Add Temporary Extension**, then select `extension/`.
 2. Reload the page you are testing and click **Preview**. (Re-add after editing to reload.)
 
-To package it as an installable app:
+To package for distribution:
 
 ```sh
-xcrun safari-web-extension-converter extension/ \
-  --macos-only --bundle-identifier co.afromero.octoview --project-location ./Safari
+./scripts/build-safari.sh             # Mac App Store archive (converter + signed xcodebuild archive)
+npm run build:chrome                  # Chrome variant + Web Store zip in build/
 ```
+
+`extension/` is the Safari source of truth; the Chrome build patches the manifest for
+Chrome's stricter MV3 CSP (no `'unsafe-inline'`, no `blob:` workers) and grants the
+live-report viewer its relaxed CSP through a manifest `sandbox` page instead.
 
 ## Test
 
@@ -148,6 +152,7 @@ npm install
 npm test                              # vitest (jsdom): core logic and renderers
 npx playwright install chromium webkit
 npm run test:e2e                      # renders every sample in Chromium AND WebKit (Safari's engine)
+npm run test:chrome                   # loads the Chrome build into Chromium: button, live report, splat
 npm run ci                            # lint, format check, unit tests
 ```
 

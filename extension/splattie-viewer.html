@@ -23,27 +23,7 @@
          splattie-widget (LBS skinning + cursor-following state machine) runs here.
          Any failure is reported so the content script can fall back to a static
          render of the base splat. -->
-    <script>
-      const post = (m) => parent.postMessage(m, '*');
-      addEventListener('securitypolicyviolation', (e) =>
-        post({
-          type: 'ov-splat-error',
-          error: 'CSP blocked ' + e.violatedDirective + ' ' + (e.blockedURI || ''),
-        })
-      );
-      addEventListener(
-        'error',
-        (e) =>
-          post({
-            type: 'ov-splat-error',
-            error: 'error: ' + (e.message || (e.error && e.error.message) || e.filename || ''),
-          }),
-        true
-      );
-      addEventListener('unhandledrejection', (e) =>
-        post({ type: 'ov-splat-error', error: 'reject: ' + ((e.reason && e.reason.message) || e.reason || '') })
-      );
-    </script>
+    <script src="splat-boot.js"></script>
     <script type="module" src="splattie-viewer.js"></script>
   </body>
 </html>
