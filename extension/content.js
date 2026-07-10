@@ -22,10 +22,12 @@ const SPLAT_EXTS = ['.splat', '.splattie'];
 // loading either module first.
 function isPlySplatHead(buf) {
   const head = new TextDecoder().decode(new Uint8Array(buf, 0, Math.min(16384, buf.byteLength)));
+  // Compressed (PlayCanvas/SuperSplat) or standard-float 3DGS ply, vs a mesh/point cloud.
   return (
-    /property\s+\S+\s+f_dc_0\b/.test(head) &&
-    /property\s+\S+\s+scale_0\b/.test(head) &&
-    /property\s+\S+\s+rot_0\b/.test(head)
+    /property\s+\S+\s+packed_position\b/.test(head) ||
+    (/property\s+\S+\s+f_dc_0\b/.test(head) &&
+      /property\s+\S+\s+scale_0\b/.test(head) &&
+      /property\s+\S+\s+rot_0\b/.test(head))
   );
 }
 

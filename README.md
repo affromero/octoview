@@ -39,17 +39,17 @@ your cookies, and renders it in place. No service, no upload, no personal access
 Everything runs through one small, unit-tested core that dispatches by file extension. Each row is a
 renderer. Status is **verified in WebKit (Safari's engine) by an automated render test**.
 
-| Type                           | Extensions                                         | Renderer                                                                  | Status |
-| ------------------------------ | -------------------------------------------------- | ------------------------------------------------------------------------- | :----: |
-| **HTML reports / plots**       | `.html` `.htm`                                     | sandboxed frame, inline; static HTML content                              |   ✅   |
-| **Jupyter notebooks**          | `.ipynb`                                           | keeps the interactive outputs GitHub strips                               |   ✅   |
-| **3D meshes and point clouds** | `.glb` `.gltf` `.obj` `.ply` `.pcd`                | three.js loaders (parsed on the main thread), gizmo + point sliders       |   ✅   |
-| **Gaussian splats**            | `.splat` `.ply` (3DGS) `.splattie`                 | main-thread gaussian sprites, depth-sorted; `.ply` routed by header sniff |   ✅   |
-| **Model graphs**               | `.safetensors` `.gguf`                             | main-thread header parse to a tensor + metadata table                     |   ✅   |
-| **Tabular data**               | `.parquet`                                         | hyparquet, sticky-header table                                            |   ✅   |
-| **Array previews**             | `.npy` `.npz`                                      | viridis heatmap / RGB image, with a raw-numbers view (1-3D)               |   ✅   |
-| **Scientific images**          | `.exr` `.hdr` `.tif` `.tiff`                       | tone-mapped to a canvas with an exposure slider                           |   ✅   |
-| **More splats / graphs**       | `.spz` `.ksplat` `.sog` `.lcc` `.rad`, ONNX, Arrow | bespoke decoders (some Spark-only / worker-based) or Netron               |   🚧   |
+| Type                           | Extensions                                         | Renderer                                                                           | Status |
+| ------------------------------ | -------------------------------------------------- | ---------------------------------------------------------------------------------- | :----: |
+| **HTML reports / plots**       | `.html` `.htm`                                     | sandboxed frame, inline; static HTML content                                       |   ✅   |
+| **Jupyter notebooks**          | `.ipynb`                                           | keeps the interactive outputs GitHub strips                                        |   ✅   |
+| **3D meshes and point clouds** | `.glb` `.gltf` `.obj` `.ply` `.pcd`                | three.js loaders (parsed on the main thread), gizmo + point sliders                |   ✅   |
+| **Gaussian splats**            | `.splat` `.ply` (3DGS + compressed) `.splattie`    | main-thread gaussian sprites, depth-sorted; standard and SuperSplat-compressed PLY |   ✅   |
+| **Model graphs**               | `.safetensors` `.gguf`                             | main-thread header parse to a tensor + metadata table                              |   ✅   |
+| **Tabular data**               | `.parquet`                                         | hyparquet, sticky-header table                                                     |   ✅   |
+| **Array previews**             | `.npy` `.npz`                                      | viridis heatmap / RGB image, with a raw-numbers view (1-3D)                        |   ✅   |
+| **Scientific images**          | `.exr` `.hdr` `.tif` `.tiff`                       | tone-mapped to a canvas with an exposure slider                                    |   ✅   |
+| **More splats / graphs**       | `.spz` `.ksplat` `.sog` `.lcc` `.rad`, ONNX, Arrow | bespoke decoders (some Spark-only / worker-based) or Netron                        |   🚧   |
 
 > **On WebKit.** Two Safari limits shape the design. (1) Renderers parse file bytes on the main
 > thread (three.js loaders, pure-JS parsers) because Safari cannot fetch a main-thread `blob:` URL
@@ -69,8 +69,8 @@ Open any file below on GitHub and click **Preview** (after [installing](#develop
 | [`samples/cube.obj`](samples/cube.obj)                   | a mesh                                      |
 | [`samples/points.ply`](samples/points.ply)               | a colored point cloud                       |
 | [`samples/cloud.pcd`](samples/cloud.pcd)                 | a PCD point cloud                           |
-| [`samples/head.splat`](samples/head.splat)               | a Gaussian splat (antimatter15 `.splat`)    |
-| [`samples/splat.ply`](samples/splat.ply)                 | a 3DGS Gaussian splat (PLY)                 |
+| [`samples/capybara.splat`](samples/capybara.splat)       | a Gaussian splat (antimatter15 `.splat`)    |
+| [`samples/capybara.ply`](samples/capybara.ply)           | a compressed (SuperSplat) 3DGS splat PLY    |
 | [`samples/head.splattie`](samples/head.splattie)         | a `.splattie` bundle (base splat rendered)  |
 | [`samples/array.npy`](samples/array.npy)                 | a NumPy array as a heatmap                  |
 | [`samples/array.npz`](samples/array.npz)                 | a compressed multi-array `.npz`             |
@@ -136,7 +136,7 @@ extension/
   core.js              pure and DOM logic: dispatch, URL resolve, notebook render (unit-tested)
   content.js           github.com: button, fetch with cookies, inline render pane
   render3d.js          three.js mesh and point-cloud renderer (gizmo, point sliders)
-  render-splat.js      main-thread Gaussian splat renderer (.splat, 3DGS .ply, .splattie)
+  render-splat.js      main-thread Gaussian splat renderer (.splat, 3DGS/compressed .ply, .splattie)
   render-array.js      .npy/.npz heatmap/image + raw-numbers view
   render-table.js      .parquet table (hyparquet)
   render-model.js      .safetensors/.gguf tensor and metadata table
