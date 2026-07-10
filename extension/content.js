@@ -242,28 +242,19 @@ function reportFrame(html) {
   return f;
 }
 
-// Spark reads .ply/.splat/.spz/.ksplat from raw bytes; .splattie is a ZIP whose
-// manifest points at the base splat, which we unwrap here.
-async function splatBytes(buf, ext) {
-  if (ext !== '.splattie') return { bytes: buf, fileName: 'splat' + ext };
-  const { unzip, toBuffer } = await loadModule('unzip.js');
-  const files = unzip(buf);
-  const manifest = JSON.parse(new TextDecoder().decode(files.get('manifest.json')));
-  const file = manifest.avatar.splat.file;
-  return { bytes: toBuffer(files.get(file)), fileName: file };
-}
-
-// Render a splat with Spark inside the extension's splat-viewer page (embedded
-// inline as an iframe, the one context whose CSP allows Spark's worker + WASM).
-// If the extension frame is blocked, or Spark cannot start (no beacon / error /
-// timeout), fall back to the main-thread renderer, which needs no worker or WASM.
-// .spz/.ksplat have no main-thread decoder, so Spark is the only path; if it
-// fails, show the reason instead of falling back to a renderer that cannot read them.
+// Render a splat inside an extension viewer page (embedded inline as an iframe,
+// the one context whose CSP allows Spark's worker + WASM): a static splat goes to
+// the Spark viewer; a rigged .splattie goes to the interactive splattie-widget
+// viewer. If the frame is blocked or the viewer cannot start (no beacon / error /
+// timeout), fall back to the main-thread renderer. .spz/.ksplat have no main-thread
+// decoder, so the viewer is the only path; if it fails, show the reason.
 const SPARK_ONLY = ['.spz', '.ksplat'];
 
 async function splatFrame(buf, ext) {
-  const { bytes, fileName } = await splatBytes(buf, ext);
-  const viewerUrl = browser.runtime.getURL('splat-viewer.html');
+  const splattie = ext === '.splattie';
+  const bytes = buf;
+  const fileName = splattie ? 'file.splattie' : 'splat' + ext;
+  const viewerUrl = browser.runtime.getURL(splattie ? 'splattie-viewer.html' : 'splat-viewer.html');
   const f = document.createElement('iframe');
   f.className = 'ov-frame';
   let settled = false;

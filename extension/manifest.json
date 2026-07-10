@@ -17,6 +17,8 @@
         "viewer.html",
         "splat-viewer.html",
         "splat-viewer.js",
+        "splattie-viewer.html",
+        "splattie-viewer.js",
         "render3d.js",
         "render-array.js",
         "render-table.js",
@@ -27,6 +29,7 @@
         "unzip.js",
         "vendor/three3d.esm.js",
         "vendor/spark.esm.js",
+        "vendor/splattie-widget.esm.js",
         "vendor/plotly.esm.js",
         "vendor/hyparquet.esm.js",
         "vendor/fflate.esm.js"
