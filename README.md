@@ -22,7 +22,7 @@ _Gaussian splats, meshes, point clouds, depth and EXR, HTML reports, notebooks, 
 [![code style: prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg)](https://prettier.io)
 [![Platform](https://img.shields.io/badge/platform-macOS-000000?logo=apple&logoColor=white)](#develop)
 [![Three.js](https://img.shields.io/badge/three.js-r185-black?logo=threedotjs&logoColor=white)](https://threejs.org)
-[![Formats](https://img.shields.io/badge/formats-22-orange)](#what-it-previews)
+[![Formats](https://img.shields.io/badge/formats-24-orange)](#what-it-previews)
 
 [Why](#why) · [What it previews](#what-it-previews) · [Try it](#try-it-from-this-repo) · [How it works](#how-it-works) · [Related work](#related-work) · [Develop](#develop)
 
@@ -61,16 +61,16 @@ opening a real, reasonably sized asset directly from the private repository wher
 Everything runs through one small, unit-tested core that dispatches by file extension. Each row is a
 renderer. Status is **verified in WebKit (Safari's engine) by an automated render test**.
 
-| Type                           | Extensions                                                                                   | Renderer                                                                                | Status |
-| ------------------------------ | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | :----: |
-| **HTML reports / plots**       | `.html` `.htm`                                                                               | extension viewer frame: the report's own scripts run, sandboxed; static fallback        |   ✅   |
-| **Jupyter notebooks**          | `.ipynb`                                                                                     | Plotly outputs render live from the MIME bundle; the rest GitHub strips is kept         |   ✅   |
-| **3D meshes and point clouds** | `.glb` `.gltf` `.obj` `.ply` `.pcd`                                                          | three.js loaders (parsed on the main thread), gizmo + point sliders                     |   ✅   |
-| **Gaussian splats**            | `.splat` `.ply` (3DGS + compressed) `.splattie` `.spz` (v1-4) `.ksplat` `.sog` `.lcc` `.rad` | Spark previews RAD; LCC loads `index.bin` and `data.bin` from the same GitHub directory |   ✅   |
-| **Model graphs**               | `.safetensors` `.gguf` `.onnx`                                                               | tensor + metadata tables; ONNX gets a Netron-style SVG graph of the ops                 |   ✅   |
-| **Tabular data**               | `.parquet` `.arrow` `.feather` `.ipc`                                                        | hyparquet / flechette, sticky-header table                                              |   ✅   |
-| **Array previews**             | `.npy` `.npz`                                                                                | viridis heatmap / RGB image, with a raw-numbers view (1-3D)                             |   ✅   |
-| **Scientific images**          | `.exr` `.hdr` `.tif` `.tiff`                                                                 | tone-mapped to a canvas with an exposure slider                                         |   ✅   |
+| Type                           | Extensions                                                                                   | Renderer                                                                                              | Status |
+| ------------------------------ | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | :----: |
+| **HTML reports / plots**       | `.html` `.htm`                                                                               | extension viewer frame: the report's own scripts run, sandboxed; static fallback                      |   ✅   |
+| **Jupyter notebooks**          | `.ipynb`                                                                                     | Plotly outputs render live from the MIME bundle; the rest GitHub strips is kept                       |   ✅   |
+| **3D meshes and point clouds** | `.glb` `.gltf` `.obj` `.ply` `.pcd`                                                          | three.js loaders (parsed on the main thread), gizmo + point sliders                                   |   ✅   |
+| **Gaussian splats**            | `.splat` `.ply` (3DGS + compressed) `.splattie` `.spz` (v1-4) `.ksplat` `.sog` `.lcc` `.rad` | Spark previews RAD (Safari only); LCC loads `index.bin` and `data.bin` from the same GitHub directory |   ✅   |
+| **Model graphs**               | `.safetensors` `.gguf` `.onnx`                                                               | tensor + metadata tables; ONNX gets a Netron-style SVG graph of the ops                               |   ✅   |
+| **Tabular data**               | `.parquet` `.arrow` `.feather` `.ipc`                                                        | hyparquet / flechette, sticky-header table                                                            |   ✅   |
+| **Array previews**             | `.npy` `.npz`                                                                                | viridis heatmap / RGB image, with a raw-numbers view (1-3D)                                           |   ✅   |
+| **Scientific images**          | `.exr` `.hdr` `.tif` `.tiff`                                                                 | tone-mapped to a canvas with an exposure slider                                                       |   ✅   |
 
 > **On WebKit.** Two Safari limits shape the design. (1) Renderers parse file bytes on the main
 > thread (three.js loaders, pure-JS parsers) because Safari cannot fetch a main-thread `blob:` URL
@@ -222,7 +222,7 @@ octoview is a browser extension, so the closest comparison is other GitHub exten
 
 | Extension                                                                 | What it adds                                                                                       | Renders file contents | Safari | Chrome | Firefox |
 | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | :-------------------: | :----: | :----: | :-----: |
-| **octoview** (this repo)                                                  | Inline **Preview** of the file: reports, notebooks, 3D, splats, arrays, tables, model headers, HDR |     ✅ 22 formats     |   ✅   |   ✅   |   🚧    |
+| **octoview** (this repo)                                                  | Inline **Preview** of the file: reports, notebooks, 3D, splats, arrays, tables, model headers, HDR |     ✅ 24 formats     |   ✅   |   ✅   |   🚧    |
 | [Refined GitHub](https://github.com/refined-github/refined-github)        | Hundreds of UI and workflow refinements                                                            |          ❌           |   ✅   |   ✅   |   ✅    |
 | [Octotree](https://www.octotree.io/)                                      | Collapsible file-tree sidebar                                                                      |          ❌           |  Pro   |   ✅   |   ✅    |
 | [Gitako](https://github.com/EnixCoda/Gitako)                              | File-tree sidebar and fuzzy file search                                                            |          ❌           |   ❌   |   ✅   |   ✅    |
