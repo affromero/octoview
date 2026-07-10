@@ -131,7 +131,8 @@ working on its own.
   premultiply off — a 2D canvas corrupts the alpha-carrying data channels).
 - `.lcc` (XGRIDS) is a MULTI-FILE container: the `.lcc` metadata blob plus sibling
   `index.bin` + `data.bin` fetched from the same GitHub directory (hence the
-  `media.githubusercontent.com` host permission). `lcc-decode.js` sums the LOD
+  `media.githubusercontent.com` host permission). `parseLcc` (in
+  `splat-decode.js`) sums the LOD
   records — so it must guard against overlapping records inflating the count past
   `data.bin/32` and cap to `MAX_SPLATS` (it had neither; both added).
 - `.rad` is a Spark-native LOD format with NO main-thread decoder: it renders only
