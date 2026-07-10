@@ -23,6 +23,12 @@ export { isPlySplat };
 async function decodeImage(bytes) {
   const bmp = await createImageBitmap(new Blob([bytes]), { premultiplyAlpha: 'none' });
   const { width, height } = bmp;
+  // A small .webp can decode to a gigapixel bitmap; cap the readback so a
+  // crafted .sog texture can't allocate a multi-GB canvas and OOM the tab.
+  if (width * height > 64 * 1024 * 1024) {
+    bmp.close();
+    throw new Error('.sog texture is too large (' + width + '×' + height + ')');
+  }
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
