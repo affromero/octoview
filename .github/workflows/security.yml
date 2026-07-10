@@ -1,0 +1,30 @@
+name: Security
+
+# Dependency vulnerability audit — the npm analog of cargo-audit. Runs on every
+# push/PR to main and weekly so a newly-disclosed advisory is caught even
+# without a code change.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '23 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Fail on a high or critical advisory in the (dev-only) dependency tree.
+      - run: npm audit --audit-level=high
