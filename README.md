@@ -60,7 +60,7 @@ renderer. Status is **verified in WebKit (Safari's engine) by an automated rende
 > thread (three.js loaders, pure-JS parsers) because Safari cannot fetch a main-thread `blob:` URL
 > from inside a worker. (2) A report's scripts cannot run in the blob page itself: github's CSP is
 > inherited by in-page frames, and Safari does not honor manifest sandbox pages. So octoview hosts
-> reports in its **own extension viewer page** — the one context whose CSP it controls — inside a
+> reports in its **own extension viewer page** (the one context whose CSP it controls), inside a
 > sandboxed frame where the report's scripts DO execute (opaque origin: no extension APIs, no
 > cookies). If the browser refuses the relaxed extension-page CSP, the report falls back to a
 > static in-page frame. Notebook Plotly outputs skip scripts entirely: their declarative MIME
@@ -106,7 +106,7 @@ the rendered file; clicking it again swaps back.
 - **Reports run live, sandboxed.** A report's own scripts cannot run in the blob page (github's CSP
   is inherited by in-page frames, and Safari does not honor manifest sandbox pages), so octoview
   frames the report inside its own extension viewer page, whose CSP it controls. There the report
-  renders in a nested sandboxed frame where its scripts DO execute — in an opaque origin with no
+  renders in a nested sandboxed frame where its scripts DO execute, in an opaque origin with no
   extension APIs, no cookies, and no GitHub DOM. The viewer's inline handshake doubles as a
   capability probe: if the browser refuses the relaxed extension-page CSP, octoview swaps in the
   static in-page frame instead.
