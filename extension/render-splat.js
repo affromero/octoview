@@ -187,7 +187,11 @@ void main(){
   // a ~1px dot — the splat centers as a point cloud (see the fragment shader,
   // which drives those collapsed means to full intensity).
   mat3 cov2d = transpose(T) * Vrk * T * uVariance;
-  cov2d[0][0] += 0.3; cov2d[1][1] += 0.3; // low-pass so a splat is never sub-pixel
+  // Low-pass floor (min screen footprint) also shrinks with variance, so the
+  // collapsed means read as crisp distinct points, not a slightly grainier
+  // surface. Floored at 0.12 so a mean never fully vanishes into a sub-pixel gap.
+  float lp = mix(0.12, 0.3, uVariance);
+  cov2d[0][0] += lp; cov2d[1][1] += lp;
   float mid = 0.5*(cov2d[0][0]+cov2d[1][1]);
   float rad = length(vec2((cov2d[0][0]-cov2d[1][1])*0.5, cov2d[0][1]));
   float l1 = mid+rad, l2 = max(mid-rad, 0.1);

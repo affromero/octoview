@@ -145,8 +145,11 @@ execFileSync(
     String(FPS),
     '-i',
     join(frames, '%04d.png'),
+    // A touch more resolution + colors than the default so the collapsed-means
+    // (Variance) frames keep their stipple instead of smearing to a smooth
+    // surface. Global palette (no per-frame) to stay well under the 1 MB budget.
     '-vf',
-    'scale=640:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=64[p];[s1][p]paletteuse=dither=bayer:bayer_scale=3',
+    'scale=720:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=96[p];[s1][p]paletteuse=dither=bayer:bayer_scale=4',
     '-loop',
     '0',
     out,
