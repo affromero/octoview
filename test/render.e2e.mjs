@@ -115,6 +115,28 @@ const CASES = [
     sample: 'samples/head.splattie',
     ok: (r) => r.mainCanvas && /splats/.test(r.text),
   },
+  {
+    name: 'capybara.spz',
+    sample: 'samples/capybara.spz',
+    ok: (r) => r.mainCanvas && /splats/.test(r.text),
+  },
+  {
+    name: 'butterfly.spz',
+    sample: 'samples/butterfly.spz',
+    ok: (r) => r.mainCanvas && /splats/.test(r.text),
+  },
+  {
+    name: 'capybara.ksplat',
+    sample: 'samples/capybara.ksplat',
+    ok: (r) => r.mainCanvas && /splats/.test(r.text),
+  },
+  {
+    // .sog additionally exercises the injected webp decode (createImageBitmap +
+    // WebGL2 readback) in the real engines — the part jsdom cannot see.
+    name: 'capybara.sog',
+    sample: 'samples/capybara.sog',
+    ok: (r) => r.mainCanvas && /splats/.test(r.text),
+  },
 ];
 
 let failed = 0;

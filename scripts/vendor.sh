@@ -80,6 +80,16 @@ JS
 npx esbuild build/spark.entry.mjs --bundle --format=esm --minify \
   --outfile=extension/vendor/spark.esm.js
 
+# fflate: pure-JS zip/gzip. unzipSync feeds unzip.js (.npz/.splattie/.sog
+# bundles); gunzipSync feeds the .spz decoder (whole-file gzip wrapper).
+# ponytail: decoders are hand-written in splat-decode.js — reusing Spark's was
+# tried and rejected: its bundle doesn't tree-shake (5MB for SpzReader alone).
+cat > build/fflate.entry.mjs <<'JS'
+export { unzipSync, gunzipSync } from 'fflate';
+JS
+npx esbuild build/fflate.entry.mjs --bundle --format=esm --minify \
+  --outfile=extension/vendor/fflate.esm.js
+
 # splattie-widget (@afromero/splattie-widget): the rigged/interactive splat format
 # (LBS skinning + cursor-following state machine on top of Spark). Bundled
 # self-contained (Spark + jszip inlined) and auto-registers <splattie-widget>.

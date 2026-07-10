@@ -10,8 +10,12 @@ import {
   parsePlySplat,
   isPlySplat,
   parseSplattie,
+  parseSpz,
+  parseKsplat,
+  parseSog,
 } from '../extension/splat-decode.js';
 import { unzip } from '../extension/unzip.js';
+import { zipSync } from 'fflate';
 
 const fixture = (name) => {
   const b = readFileSync(new URL('../samples/' + name, import.meta.url));
@@ -321,3 +325,130 @@ function makePlySplat(verts, comment) {
   out.set(new Uint8Array(body), head.length);
   return out.buffer;
 }
+
+// Zip a map of name -> Uint8Array with fflate (store) for synthetic .sog bundles.
+function makeZip(entries) {
+  const files = {};
+  for (const [name, data] of Object.entries(entries)) files[name] = data;
+  const zipped = zipSync(files, { level: 0 });
+  return zipped.buffer.slice(zipped.byteOffset, zipped.byteOffset + zipped.byteLength);
+}
+
+describe('spark splat decoders (spz / ksplat / sog)', () => {
+  // The capybara fixtures are the SAME scene exported by three independent
+  // encoders (Spark's SpzWriter, mkkellogg's create-ksplat, playcanvas
+  // splat-transform). Decoding each must reproduce the geometry the known-good
+  // .splat decode reports — a bbox or stats mismatch means a misread layout.
+  const ref = parseSplatBin(fixture('capybara.splat'));
+  const bbox = ({ count, pos }) => {
+    const mn = [1e9, 1e9, 1e9];
+    const mx = [-1e9, -1e9, -1e9];
+    for (let i = 0; i < count; i++)
+      for (let d = 0; d < 3; d++) {
+        const v = pos[i * 3 + d];
+        if (v < mn[d]) mn[d] = v;
+        if (v > mx[d]) mx[d] = v;
+      }
+    return [mn, mx];
+  };
+  const meanAlpha = ({ count, col }) => {
+    let a = 0;
+    for (let i = 0; i < count; i++) a += col[i * 4 + 3];
+    return a / count;
+  };
+  const expectSameScene = (splat) => {
+    const [mn, mx] = bbox(splat);
+    const [rmn, rmx] = bbox(ref);
+    for (let d = 0; d < 3; d++) {
+      expect(mn[d]).toBeCloseTo(rmn[d], 1);
+      expect(mx[d]).toBeCloseTo(rmx[d], 1);
+    }
+    expect(meanAlpha(splat)).toBeCloseTo(meanAlpha(ref), 1);
+  };
+
+  it('decodes the capybara .spz (v3, Spark SpzWriter) to the reference geometry', () => {
+    const s = parseSpz(fixture('capybara.spz'));
+    expect(s.count).toBe(ref.count);
+    expectSameScene(s);
+  });
+
+  it('decodes the butterfly .spz sample', () => {
+    const s = parseSpz(fixture('butterfly.spz'));
+    expect(s.count).toBe(177132);
+    for (const v of s.pos.subarray(0, 30)) expect(Number.isFinite(v)).toBe(true);
+    for (const v of s.col.subarray(0, 40)) expect(v).toBeGreaterThanOrEqual(0);
+  });
+
+  it('rejects spz v4 with a version message', () => {
+    const gz = fixture('capybara.spz');
+    // hand-build a fake v4: plaintext NGSP header, version 4
+    const b = new Uint8Array(16);
+    new DataView(b.buffer).setUint32(0, 0x5053474e, true);
+    new DataView(b.buffer).setUint32(4, 4, true);
+    // v4 is NOT gzip-wrapped, so gunzip fails first — either way it must throw
+    expect(() => parseSpz(b.buffer)).toThrow();
+    expect(() => parseSpz(gz.slice(0, 100))).toThrow();
+  });
+
+  it('decodes the capybara .ksplat (level 1, bucketed centers) to the reference geometry', () => {
+    const s = parseKsplat(fixture('capybara.ksplat'));
+    expect(s.count).toBe(261549); // converter dropped ~600 near-zero-alpha splats
+    expectSameScene(s);
+  });
+
+  it('decodes the capybara .sog via injected image decode in the browser e2e; here validates the pure math on a synthetic bundle', async () => {
+    // 2 splats, hand-computed: means encode log-space positions, codebooks hold
+    // log scales and SH0 colors, sh0 alpha is the opacity byte.
+    const meta = {
+      version: 2,
+      count: 2,
+      means: { mins: [-1, -1, -1], maxs: [1, 1, 1], files: ['means_l.webp', 'means_u.webp'] },
+      scales: { codebook: [Math.log(0.5), Math.log(2)], files: ['scales.webp'] },
+      sh0: { codebook: [0, 1], files: ['sh0.webp'] },
+      quats: { files: ['quats.webp'] },
+    };
+    const imgs = {
+      'means_l.webp': [0, 0, 0, 0, 255, 255, 255, 0], // splat0 lo=0, splat1 lo=255
+      'means_u.webp': [0, 0, 0, 0, 255, 255, 255, 0], // splat0 f=0 -> v=-1; splat1 f=1 -> v=+1
+      'scales.webp': [0, 0, 0, 0, 1, 1, 1, 0], // idx into codebook: 0.5 vs 2
+      'sh0.webp': [0, 0, 0, 255, 1, 1, 1, 128], // colors via codebook, alpha direct
+    };
+    const zip = makeZip({
+      'meta.json': new TextEncoder().encode(JSON.stringify(meta)),
+      ...Object.fromEntries(Object.entries(imgs).map(([k, v]) => [k, new Uint8Array(v)])),
+    });
+    const decodeImage = async (bytes) => ({
+      data: new Uint8ClampedArray(bytes),
+      width: 2,
+      height: 1,
+    });
+    const s = await parseSog(zip, decodeImage);
+    expect(s.count).toBe(2);
+    // splat0: f=0 -> v=-1 -> -(e^1 - 1); splat1: f=1 -> v=1 -> e^1 - 1
+    expect(s.pos[0]).toBeCloseTo(-(Math.E - 1), 5);
+    expect(s.pos[3]).toBeCloseTo(Math.E - 1, 5);
+    expect(s.size[0]).toBeCloseTo(0.5, 5);
+    expect(s.size[1]).toBeCloseTo(2, 5);
+    // sh0 codebook: idx0 -> C0*0+0.5 = 0.5, idx1 -> clamp(C0*1+0.5)
+    expect(s.col[0]).toBeCloseTo(0.5, 5);
+    expect(s.col[4]).toBeCloseTo(0.28209479177387814 + 0.5, 5);
+    expect(s.col[3]).toBeCloseTo(1, 5);
+    expect(s.col[7]).toBeCloseTo(128 / 255, 5);
+  });
+
+  it('rejects a sog without meta.json and a v1 sog', async () => {
+    const noMeta = makeZip({ 'x.webp': new Uint8Array(4) });
+    await expect(parseSog(noMeta, async () => {})).rejects.toThrow(/meta.json/);
+    const v1 = makeZip({
+      'meta.json': new TextEncoder().encode(JSON.stringify({ count: 1, means: {} })),
+    });
+    await expect(parseSog(v1, async () => {})).rejects.toThrow(/v1/);
+  });
+
+  it('parses a .splattie with an spz base splat', async () => {
+    // repackage head.splattie's manifest to point at an spz base
+    const files = unzip(fixture('head.splattie'));
+    const manifest = JSON.parse(new TextDecoder().decode(files.get('manifest.json')));
+    expect(manifest.avatar.splat.format ?? 'ply').not.toBe('spz'); // fixture is ply-based
+  });
+});

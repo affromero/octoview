@@ -18,7 +18,7 @@ _Gaussian splats, meshes, point clouds, depth and EXR, HTML reports, notebooks, 
 [![code style: prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg)](https://prettier.io)
 [![Platform](https://img.shields.io/badge/platform-macOS-000000?logo=apple&logoColor=white)](#develop)
 [![Three.js](https://img.shields.io/badge/three.js-r185-black?logo=threedotjs&logoColor=white)](https://threejs.org)
-[![Formats](https://img.shields.io/badge/formats-19-orange)](#what-it-previews)
+[![Formats](https://img.shields.io/badge/formats-20-orange)](#what-it-previews)
 
 [Why](#why) · [What it previews](#what-it-previews) · [Try it](#try-it-from-this-repo) · [How it works](#how-it-works) · [Related work](#related-work) · [Develop](#develop)
 
@@ -45,17 +45,17 @@ your cookies, and renders it in place. No service, no upload, no personal access
 Everything runs through one small, unit-tested core that dispatches by file extension. Each row is a
 renderer. Status is **verified in WebKit (Safari's engine) by an automated render test**.
 
-| Type                           | Extensions                                         | Renderer                                                                           | Status |
-| ------------------------------ | -------------------------------------------------- | ---------------------------------------------------------------------------------- | :----: |
-| **HTML reports / plots**       | `.html` `.htm`                                     | extension viewer frame: the report's own scripts run, sandboxed; static fallback   |   ✅   |
-| **Jupyter notebooks**          | `.ipynb`                                           | Plotly outputs render live from the MIME bundle; the rest GitHub strips is kept    |   ✅   |
-| **3D meshes and point clouds** | `.glb` `.gltf` `.obj` `.ply` `.pcd`                | three.js loaders (parsed on the main thread), gizmo + point sliders                |   ✅   |
-| **Gaussian splats**            | `.splat` `.ply` (3DGS + compressed) `.splattie`    | main-thread gaussian sprites, depth-sorted; standard and SuperSplat-compressed PLY |   ✅   |
-| **Model graphs**               | `.safetensors` `.gguf`                             | main-thread header parse to a tensor + metadata table                              |   ✅   |
-| **Tabular data**               | `.parquet`                                         | hyparquet, sticky-header table                                                     |   ✅   |
-| **Array previews**             | `.npy` `.npz`                                      | viridis heatmap / RGB image, with a raw-numbers view (1-3D)                        |   ✅   |
-| **Scientific images**          | `.exr` `.hdr` `.tif` `.tiff`                       | tone-mapped to a canvas with an exposure slider                                    |   ✅   |
-| **More splats / graphs**       | `.spz` `.ksplat` `.sog` `.lcc` `.rad`, ONNX, Arrow | bespoke decoders (some Spark-only / worker-based) or Netron                        |   🚧   |
+| Type                           | Extensions                                                                          | Renderer                                                                                         | Status |
+| ------------------------------ | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | :----: |
+| **HTML reports / plots**       | `.html` `.htm`                                                                      | extension viewer frame: the report's own scripts run, sandboxed; static fallback                 |   ✅   |
+| **Jupyter notebooks**          | `.ipynb`                                                                            | Plotly outputs render live from the MIME bundle; the rest GitHub strips is kept                  |   ✅   |
+| **3D meshes and point clouds** | `.glb` `.gltf` `.obj` `.ply` `.pcd`                                                 | three.js loaders (parsed on the main thread), gizmo + point sliders                              |   ✅   |
+| **Gaussian splats**            | `.splat` `.ply` (3DGS + compressed) `.splattie` `.spz` (v1-3) `.ksplat` `.sog` (v2) | main-thread gaussian sprites, depth-sorted; every format Spark reads, decoded without its worker |   ✅   |
+| **Model graphs**               | `.safetensors` `.gguf`                                                              | main-thread header parse to a tensor + metadata table                                            |   ✅   |
+| **Tabular data**               | `.parquet`                                                                          | hyparquet, sticky-header table                                                                   |   ✅   |
+| **Array previews**             | `.npy` `.npz`                                                                       | viridis heatmap / RGB image, with a raw-numbers view (1-3D)                                      |   ✅   |
+| **Scientific images**          | `.exr` `.hdr` `.tif` `.tiff`                                                        | tone-mapped to a canvas with an exposure slider                                                  |   ✅   |
+| **More formats**               | `.spz` v4, `.lcc` `.rad`, ONNX, Arrow                                               | zstd-stream spz, bespoke decoders, or Netron                                                     |   🚧   |
 
 > **On WebKit.** Two Safari limits shape the design. (1) Renderers parse file bytes on the main
 > thread (three.js loaders, pure-JS parsers) because Safari cannot fetch a main-thread `blob:` URL
@@ -73,7 +73,7 @@ renderer. Status is **verified in WebKit (Safari's engine) by an automated rende
 
 Open any file below on GitHub and click **Preview** (after [installing](#develop)).
 
-- **3D and Gaussian splats:** [cube.obj](samples/cube.obj) · [points.ply](samples/points.ply) · [cloud.pcd](samples/cloud.pcd) · [capybara.splat](samples/capybara.splat) · [capybara.ply](samples/capybara.ply) (compressed 3DGS) · [head.splattie](samples/head.splattie) · [butterfly.spz](samples/butterfly.spz)
+- **3D and Gaussian splats:** [cube.obj](samples/cube.obj) · [points.ply](samples/points.ply) · [cloud.pcd](samples/cloud.pcd) · [capybara.splat](samples/capybara.splat) · [capybara.ply](samples/capybara.ply) (compressed 3DGS) · [capybara.spz](samples/capybara.spz) · [capybara.ksplat](samples/capybara.ksplat) · [capybara.sog](samples/capybara.sog) · [head.splattie](samples/head.splattie) · [butterfly.spz](samples/butterfly.spz)
 - **Arrays and tables:** [array.npy](samples/array.npy) · [array.npz](samples/array.npz) · [metrics.parquet](samples/metrics.parquet)
 - **Model graphs:** [model.safetensors](samples/model.safetensors) · [model.gguf](samples/model.gguf)
 - **Scientific images:** [render.hdr](samples/render.hdr) · [render.exr](samples/render.exr) · [depth.tiff](samples/depth.tiff)
@@ -145,7 +145,7 @@ flowchart TD
             rsplat["render-splat.js<br/>main-thread splats"]
             rmisc["render-array · render-table<br/>render-model · render-image"]
         end
-        decode["splat-decode.js<br/>.splat · 3DGS/compressed .ply · .splattie"]
+        decode["splat-decode.js<br/>.splat · 3DGS/compressed .ply · .splattie<br/>.spz · .ksplat · .sog"]
     end
 
     subgraph pages["Extension viewer pages (octoview-controlled CSP)"]
@@ -184,7 +184,7 @@ octoview is a browser extension, so the closest comparison is other GitHub exten
 
 | Extension                                                                 | What it adds                                                                                       | Renders file contents | Safari | Chrome | Firefox |
 | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | :-------------------: | :----: | :----: | :-----: |
-| **octoview** (this repo)                                                  | Inline **Preview** of the file: reports, notebooks, 3D, splats, arrays, tables, model headers, HDR |     ✅ 19 formats     |   ✅   |   ✅   |   🚧    |
+| **octoview** (this repo)                                                  | Inline **Preview** of the file: reports, notebooks, 3D, splats, arrays, tables, model headers, HDR |     ✅ 20 formats     |   ✅   |   ✅   |   🚧    |
 | [Refined GitHub](https://github.com/refined-github/refined-github)        | Hundreds of UI and workflow refinements                                                            |          ❌           |   ✅   |   ✅   |   ✅    |
 | [Octotree](https://www.octotree.io/)                                      | Collapsible file-tree sidebar                                                                      |          ❌           |  Pro   |   ✅   |   ✅    |
 | [Gitako](https://github.com/EnixCoda/Gitako)                              | File-tree sidebar and fuzzy file search                                                            |          ❌           |   ❌   |   ✅   |   ✅    |
@@ -209,7 +209,7 @@ It comes up, so here is the reasoning:
 ## Roadmap
 
 - **Firefox listing.** The AMO-ready package builds from this repo (`npm run build:firefox`, lint-clean); what remains is the listing itself and a runtime check in Gecko (Playwright cannot drive Firefox extensions, so that check is selenium/geckodriver work).
-- **More splat and graph coverage.** Promote the in-progress decoders (`.spz`, `.ksplat`, `.sog`) from experimental to verified, and add real model-graph rendering (ONNX via a Netron-style view) beyond today's tensor and metadata table.
+- **More formats.** `.spz` v4 (zstd streams — newer than what Spark itself reads), and real model-graph rendering (ONNX via a Netron-style view) beyond today's tensor and metadata table.
 - **Other browsers and new formats: PRs welcome.** The renderer interface is a single extension-keyed dispatch, so adding a format is mostly one self-contained module plus a WebKit render test. Contributions are the fastest path to wider coverage.
 
 ## Develop

@@ -5,22 +5,58 @@
 // Isotropic (no covariance ellipse), which is enough for a preview. Sorting
 // reorders only the index buffer (cheap) so alpha blending is back-to-front correct.
 import { THREE, OrbitControls, ViewHelper } from './vendor/three3d.esm.js';
-import { parseSplatBin, parsePlySplat, parseSplattie, isPlySplat } from './splat-decode.js';
+import {
+  parseSplatBin,
+  parsePlySplat,
+  parseSplattie,
+  parseSpz,
+  parseKsplat,
+  parseSog,
+  isPlySplat,
+} from './splat-decode.js';
 
 export { isPlySplat };
+
+// Decode a webp data texture to raw RGBA without alpha premultiplication — a 2D
+// canvas premultiplies and corrupts the color channels of low-alpha pixels
+// (sog's sh0 alpha IS the opacity), so read back through a WebGL2 texture.
+async function decodeImage(bytes) {
+  const bmp = await createImageBitmap(new Blob([bytes]), { premultiplyAlpha: 'none' });
+  const { width, height } = bmp;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const gl = canvas.getContext('webgl2');
+  if (!gl) throw new Error('WebGL2 unavailable for texture decode');
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bmp);
+  const fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  const data = new Uint8ClampedArray(width * height * 4);
+  gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(data.buffer));
+  bmp.close();
+  return { data, width, height };
+}
 
 export async function renderSplat(buf, mount, ext) {
   ensureStyle();
   mount.style.position = 'relative';
   try {
-    if (ext === '.spz' || ext === '.ksplat')
-      throw new Error(ext + ' needs the Spark renderer (unavailable here)');
     const splat =
       ext === '.splat'
         ? parseSplatBin(buf)
         : ext === '.splattie'
           ? await parseSplattie(buf)
-          : parsePlySplat(buf);
+          : ext === '.spz'
+            ? parseSpz(buf)
+            : ext === '.ksplat'
+              ? parseKsplat(buf)
+              : ext === '.sog'
+                ? await parseSog(buf, decodeImage)
+                : parsePlySplat(buf);
     if (!splat.count) throw new Error('no splats found');
     view(splat, mount);
   } catch (e) {
