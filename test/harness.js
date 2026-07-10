@@ -53,6 +53,9 @@ try {
   } else if (['.parquet', '.arrow', '.feather', '.ipc'].includes(ext)) {
     const { renderTable } = await import('/extension/render-table.js');
     await renderTable(buf, mount, ext);
+  } else if (ext === '.onnx') {
+    const { renderOnnx } = await import('/extension/render-onnx.js');
+    renderOnnx(buf, mount);
   } else if (ext === '.safetensors' || ext === '.gguf') {
     const { renderModel } = await import('/extension/render-model.js');
     renderModel(buf, mount, ext);
