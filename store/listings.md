@@ -1,4 +1,4 @@
-# octoview — store listing copy
+# octoview, store listing copy
 
 Ready-to-paste text for the Chrome Web Store, Mac App Store (Safari), and Firefox
 AMO. Keep the wording truthful: octoview collects no data and makes no network
@@ -16,9 +16,9 @@ request to any non-GitHub host.
   servers. The extension only fetches the file you ask it to preview, from
   GitHub, using your existing session.
 - **Permissions and why each is needed:**
-  - `github.com` — the content script adds the Preview button and reads the blob
+  - `github.com`, the content script adds the Preview button and reads the blob
     page you are viewing.
-  - `raw.githubusercontent.com`, `media.githubusercontent.com` — to fetch the raw
+  - `raw.githubusercontent.com`, `media.githubusercontent.com`, to fetch the raw
     file bytes (and, for LCC, its sibling `index.bin` / `data.bin`) that GitHub
     serves from these hosts, using your session cookies so private repos work.
 - **Support / homepage URL:** https://github.com/affromero/octoview
@@ -41,16 +41,16 @@ request to any non-GitHub host.
 >
 > It previews 24 formats that GitHub shows as raw bytes or not at all:
 >
-> • 3D Gaussian splats — .splat, .spz (v1–v4), .ksplat, .sog, 3DGS .ply, .splattie
-> • Meshes and point clouds — .glb, .gltf, .obj, .ply, .pcd
-> • HTML reports — Plotly, ydata-profiling, W&B exports, with the report's own
+> • 3D Gaussian splats: .splat, .spz (v1-v4), .ksplat, .sog, 3DGS .ply, .splattie
+> • Meshes and point clouds: .glb, .gltf, .obj, .ply, .pcd
+> • HTML reports: Plotly, ydata-profiling, W&B exports, with the report's own
 > charts running live in a sandbox
-> • Jupyter notebooks — .ipynb, keeping the interactive Plotly outputs GitHub strips
-> • Model files — .safetensors and .gguf tensor tables, plus a Netron-style graph
+> • Jupyter notebooks: .ipynb, keeping the interactive Plotly outputs GitHub strips
+> • Model files: .safetensors and .gguf tensor tables, plus a Netron-style graph
 > view for .onnx
-> • Tables — .parquet, .arrow, .feather
-> • Arrays — .npy, .npz, as heatmaps or images
-> • Scientific images — .exr, .hdr, .tiff, tone-mapped with an exposure slider
+> • Tables: .parquet, .arrow, .feather
+> • Arrays: .npy, .npz, as heatmaps or images
+> • Scientific images: .exr, .hdr, .tiff, tone-mapped with an exposure slider
 >
 > It works on private repositories because it rides your existing GitHub session.
 > There is no service, no upload, and no personal access token. octoview collects
@@ -95,7 +95,7 @@ request to any non-GitHub host.
 >
 > It previews the ML and data formats GitHub serves as raw bytes or not at all:
 >
-> - 3D Gaussian splats: .splat, .spz (v1–v4), .ksplat, .sog, 3DGS .ply, .splattie
+> - 3D Gaussian splats: .splat, .spz (v1-v4), .ksplat, .sog, 3DGS .ply, .splattie
 > - Meshes and point clouds: .glb, .gltf, .obj, .ply, .pcd
 > - HTML reports (Plotly, ydata-profiling, W&B) with their charts running live
 > - Jupyter notebooks, keeping the interactive outputs GitHub strips

@@ -1,4 +1,4 @@
-# octoview — notes for AMO reviewers
+# octoview, notes for AMO reviewers
 
 This add-on vendors a few minified third-party libraries under
 `extension/vendor/`. This document explains how to reproduce them byte-for-byte
@@ -27,7 +27,7 @@ compressed). Diff it against the unpacked submission to confirm.
 ## What each vendored file is
 
 Every bundle is produced by `esbuild` from a lockfile-pinned npm dependency in
-`scripts/vendor.sh` — **nothing is downloaded from a CDN at build time**:
+`scripts/vendor.sh`. **Nothing is downloaded from a CDN at build time**:
 
 | File                      | npm source (pinned in package.json / package-lock.json) |
 | ------------------------- | ------------------------------------------------------- |
