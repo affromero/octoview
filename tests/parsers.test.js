@@ -505,3 +505,35 @@ describe('arrow tables', () => {
     expect(t.getChild('accuracy').at(499)).toBeGreaterThan(0);
   });
 });
+
+describe('parseOnnx / layoutGraph', () => {
+  it('parses the fixture graph: ops, edges, initializers', async () => {
+    const { parseOnnx, layoutGraph } = await import('../extension/render-onnx.js');
+    const g = parseOnnx(fixture('model.onnx'));
+    expect(g.name).toBe('tiny_classifier');
+    expect(g.nodes.map((n) => n.op)).toEqual([
+      'Conv',
+      'Relu',
+      'GlobalAveragePool',
+      'Flatten',
+      'MatMul',
+      'Softmax',
+    ]);
+    expect(g.inputs).toContain('input');
+    expect(g.outputs).toEqual(['probs']);
+    expect(g.initializers.map((t) => t.name)).toEqual(['conv.weight', 'fc.weight']);
+    expect(g.initializers[0].dims).toEqual([8, 1, 3, 3]);
+    expect(g.initializers[0].dtype).toBe('f32');
+
+    const { nodes, edges } = layoutGraph(g);
+    // a pure chain: each node one rank deeper than its producer
+    expect(nodes.map((n) => n.y)).toEqual([...nodes.map((n) => n.y)].sort((a, b) => a - b));
+    expect(edges.length).toBe(5); // 5 tensor edges between the 6 chained ops
+    expect(nodes[0].weights).toEqual(['conv.weight']);
+  });
+
+  it('throws a clear error on non-onnx bytes', async () => {
+    const { parseOnnx } = await import('../extension/render-onnx.js');
+    expect(() => parseOnnx(fixture('model.gguf'))).toThrow();
+  });
+});

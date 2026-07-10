@@ -20,6 +20,7 @@
     '.ipc',
     '.safetensors',
     '.gguf',
+    '.onnx',
     '.exr',
     '.hdr',
     '.tif',

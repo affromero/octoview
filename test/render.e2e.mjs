@@ -71,6 +71,15 @@ const CASES = [
     ok: (r) => r.mainCanvas && /field|signal/.test(r.text),
   },
   {
+    name: 'model.onnx',
+    sample: 'samples/model.onnx',
+    ok: (r) =>
+      /tiny_classifier/.test(r.text) &&
+      /6 ops/.test(r.text) &&
+      /Softmax/.test(r.text) &&
+      /conv.weight/.test(r.text),
+  },
+  {
     name: 'metrics.arrow',
     sample: 'samples/metrics.arrow',
     ok: (r) => /500 rows × 5 cols/.test(r.text) && /accuracy/.test(r.text),

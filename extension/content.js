@@ -226,6 +226,12 @@ async function render(pane, buf, ext) {
     pane.style.overflow = 'auto';
     const { renderTable } = await loadModule('render-table.js');
     await renderTable(buf, pane, ext);
+  } else if (ext === '.onnx') {
+    pane.classList.add('ov-scroll');
+    pane.style.maxHeight = '82vh';
+    pane.style.overflow = 'auto';
+    const { renderOnnx } = await loadModule('render-onnx.js');
+    renderOnnx(buf, pane);
   } else if (MODEL_EXTS.includes(ext)) {
     pane.classList.add('ov-scroll');
     pane.style.maxHeight = '82vh';

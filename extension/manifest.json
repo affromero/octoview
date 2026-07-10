@@ -24,6 +24,7 @@
         "render-array.js",
         "render-table.js",
         "render-model.js",
+        "render-onnx.js",
         "render-image.js",
         "render-splat.js",
         "splat-decode.js",
