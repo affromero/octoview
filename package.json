@@ -15,6 +15,7 @@
     "test:chrome": "npm run build:chrome && node test/chrome.e2e.mjs",
     "build:firefox": "node scripts/build-firefox.mjs",
     "test:firefox": "npm run build:firefox && npx --yes addons-linter build/firefox",
+    "build:amo-source": "node scripts/build-amo-source.mjs",
     "screenshots": "npm run build:chrome && node scripts/screenshots.mjs",
     "coverage": "vitest run --coverage",
     "lint": "eslint .",
