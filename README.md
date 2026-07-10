@@ -70,27 +70,13 @@ renderer. Status is **verified in WebKit (Safari's engine) by an automated rende
 
 ## Try it from this repo
 
-Open any file below on GitHub and click **Preview** (after [installing](#develop)):
+Open any file below on GitHub and click **Preview** (after [installing](#develop)).
 
-| Sample                                                   | Shows                                                  |
-| -------------------------------------------------------- | ------------------------------------------------------ |
-| [`samples/report.html`](samples/report.html)             | an HTML report (badge turns LIVE when its scripts run) |
-| [`samples/notebook.ipynb`](samples/notebook.ipynb)       | a notebook with a live interactive Plotly chart        |
-| [`samples/cube.obj`](samples/cube.obj)                   | a mesh                                                 |
-| [`samples/points.ply`](samples/points.ply)               | a colored point cloud                                  |
-| [`samples/cloud.pcd`](samples/cloud.pcd)                 | a PCD point cloud                                      |
-| [`samples/capybara.splat`](samples/capybara.splat)       | a Gaussian splat (antimatter15 `.splat`)               |
-| [`samples/capybara.ply`](samples/capybara.ply)           | a compressed (SuperSplat) 3DGS splat PLY               |
-| [`samples/head.splattie`](samples/head.splattie)         | a `.splattie` bundle (base splat rendered)             |
-| [`samples/butterfly.spz`](samples/butterfly.spz)         | an `.spz` splat (Spark renderer only)                  |
-| [`samples/array.npy`](samples/array.npy)                 | a NumPy array as a heatmap                             |
-| [`samples/array.npz`](samples/array.npz)                 | a compressed multi-array `.npz`                        |
-| [`samples/metrics.parquet`](samples/metrics.parquet)     | a Parquet table                                        |
-| [`samples/model.safetensors`](samples/model.safetensors) | a safetensors tensor list                              |
-| [`samples/model.gguf`](samples/model.gguf)               | a GGUF model header                                    |
-| [`samples/depth.tiff`](samples/depth.tiff)               | a TIFF image                                           |
-| [`samples/render.hdr`](samples/render.hdr)               | a Radiance HDR, tone-mapped                            |
-| [`samples/render.exr`](samples/render.exr)               | an OpenEXR image, tone-mapped                          |
+- **3D and Gaussian splats:** [cube.obj](samples/cube.obj) · [points.ply](samples/points.ply) · [cloud.pcd](samples/cloud.pcd) · [capybara.splat](samples/capybara.splat) · [capybara.ply](samples/capybara.ply) (compressed 3DGS) · [head.splattie](samples/head.splattie) · [butterfly.spz](samples/butterfly.spz)
+- **Arrays and tables:** [array.npy](samples/array.npy) · [array.npz](samples/array.npz) · [metrics.parquet](samples/metrics.parquet)
+- **Model graphs:** [model.safetensors](samples/model.safetensors) · [model.gguf](samples/model.gguf)
+- **Scientific images:** [render.hdr](samples/render.hdr) · [render.exr](samples/render.exr) · [depth.tiff](samples/depth.tiff)
+- **Reports and notebooks:** [report.html](samples/report.html) · [notebook.ipynb](samples/notebook.ipynb)
 
 ## How it works
 

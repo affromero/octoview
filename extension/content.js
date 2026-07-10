@@ -92,6 +92,22 @@ function openPane(btn, buf) {
   ensureStyle();
   const pane = document.createElement('div');
   pane.id = PANE_ID;
+
+  // Always-visible bar with a way back to the code, since the preview replaces it.
+  const bar = document.createElement('div');
+  bar.className = 'ov-bar';
+  const back = document.createElement('button');
+  back.className = 'ov-back';
+  back.textContent = '◀ Back to code';
+  back.onclick = () => closePane(btn);
+  const name = document.createElement('span');
+  name.className = 'ov-bar-name';
+  name.textContent = fileName();
+  bar.append(back, name);
+  const body = document.createElement('div');
+  body.className = 'ov-pane-body';
+  pane.append(bar, body);
+
   const content = findContent();
   if (content && content.parentElement) {
     content.style.display = 'none';
@@ -102,7 +118,7 @@ function openPane(btn, buf) {
     document.body.appendChild(pane);
   }
   btn.classList.add('active');
-  render(pane, buf, extOf()).catch((e) => msg(pane, "Couldn't render: " + e.message));
+  render(body, buf, extOf()).catch((e) => msg(body, "Couldn't render: " + e.message));
 }
 
 async function render(pane, buf, ext) {
@@ -168,14 +184,30 @@ function plotlyChart(spec) {
   const div = document.createElement('div');
   div.className = 'ov-nb-plotly';
   // Plotly renders nothing into a zero-height box; honor the spec's height.
-  div.style.height = ((spec.layout && spec.layout.height) || 450) + 'px';
+  div.style.height = ((spec.layout && spec.layout.height) || 420) + 'px';
+  const L = spec.layout || {};
   loadModule('vendor/plotly.esm.js')
-    .then(({ default: Plotly }) =>
-      Plotly.newPlot(div, spec.data || [], spec.layout || {}, {
+    .then(({ default: Plotly }) => {
+      // Autosize to fill the pane width, and theme to match the dark notebook
+      // instead of Plotly's default white box.
+      const layout = {
+        ...L,
+        autosize: true,
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        font: { color: '#adbac7', ...(L.font || {}) },
+        margin: { t: 32, r: 20, b: 44, l: 56, ...(L.margin || {}) },
+        xaxis: { gridcolor: '#21262d', zerolinecolor: '#30363d', ...(L.xaxis || {}) },
+        yaxis: { gridcolor: '#21262d', zerolinecolor: '#30363d', ...(L.yaxis || {}) },
+        legend: { font: { color: '#adbac7' }, ...(L.legend || {}) },
+      };
+      delete layout.width;
+      delete layout.height;
+      return Plotly.newPlot(div, spec.data || [], layout, {
         responsive: true,
         displaylogo: false,
-      })
-    )
+      });
+    })
     .catch((e) => msg(div, "Couldn't render chart: " + e.message));
   return div;
 }
@@ -311,10 +343,11 @@ function ensureStyle() {
     @keyframes octoview-pulse{0%{box-shadow:0 0 0 0 rgba(46,160,67,.5)}
       70%{box-shadow:0 0 0 6px rgba(46,160,67,0)}100%{box-shadow:0 0 0 0 rgba(46,160,67,0)}}
     #${PANE_ID}{border:1px solid #30363d;border-radius:6px;overflow:hidden;background:#0d1117;
-      color:#e6edf3;font:14px/1.55 -apple-system,BlinkMacSystemFont,sans-serif;margin:0 0 16px}
-    #${PANE_ID}.ov-fill{height:78vh}
-    #${PANE_ID}.ov-scroll{max-height:82vh;overflow:auto}
-    #${PANE_ID}.ov-float{position:fixed;inset:52px 12px 12px;z-index:99998;height:auto}
+      color:#e6edf3;font:14px/1.55 -apple-system,BlinkMacSystemFont,sans-serif;margin:0 0 16px;
+      display:flex;flex-direction:column}
+    #${PANE_ID} .ov-pane-body.ov-fill{height:78vh}
+    #${PANE_ID} .ov-pane-body.ov-scroll{max-height:82vh;overflow:auto}
+    #${PANE_ID}.ov-float{position:fixed;inset:52px 12px 12px;z-index:99998}
     #${PANE_ID} .ov-frame{width:100%;height:100%;border:0;background:#fff}
     #${PANE_ID} .ov-msg{padding:24px}
     #${PANE_ID} .ov-nb{max-width:980px;margin:0 auto;padding:24px 20px}
@@ -326,7 +359,14 @@ function ensureStyle() {
       font:12.5px/1.5 ui-monospace,monospace;white-space:pre-wrap;color:#adbac7}
     #${PANE_ID} .ov-nb-err{color:#ff7b72}
     #${PANE_ID} .ov-nb-out{width:100%;height:360px;border:1px solid #30363d;border-radius:6px;background:#fff;margin:0 0 12px}
-    #${PANE_ID} .ov-nb-plotly{width:100%;border:1px solid #30363d;border-radius:6px;background:#fff;margin:0 0 12px;overflow:hidden}
+    #${PANE_ID} .ov-nb-plotly{width:100%;border:1px solid #21262d;border-radius:6px;background:#0d1117;margin:0 0 12px;overflow:hidden}
+    #${PANE_ID} .ov-bar{flex:0 0 auto;display:flex;align-items:center;gap:10px;
+      padding:8px 14px;background:#161b22;border-bottom:1px solid #30363d}
+    #${PANE_ID} .ov-pane-body{min-height:0}
+    #${PANE_ID} .ov-back{font:500 12px/1 -apple-system,sans-serif;padding:5px 12px;color:#c9d1d9;
+      background:#21262d;border:1px solid #30363d;border-radius:6px;cursor:pointer}
+    #${PANE_ID} .ov-back:hover{background:#30363d;color:#fff}
+    #${PANE_ID} .ov-bar-name{font:12px ui-monospace,monospace;color:#7d8590;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     #${PANE_ID} .ov-nb-img{max-width:100%;background:#fff;border-radius:6px;margin:0 0 12px}
     #${PANE_ID} .ov-arr-meta{padding:14px 18px 6px;font:12.5px/1.5 ui-monospace,monospace;color:#adbac7}
     #${PANE_ID} .ov-arr-canvas{display:block;margin:0 18px 18px;border:1px solid #30363d;border-radius:6px}
