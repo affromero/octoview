@@ -1,0 +1,40 @@
+name: Release
+
+# On a v* tag, build the three store packages and publish them on the GitHub
+# release, with notes pulled from the matching CHANGELOG section.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The Chrome/Firefox builds rasterize the icon with Playwright Chromium.
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build:chrome
+      - run: npm run build:firefox
+      - run: npm run build:amo-source
+      - name: Publish store packages on the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          NOTES="$(awk "/^## \[$VERSION\]/{f=1;next} /^## \[/{if(f)exit} f" CHANGELOG.md)"
+          ASSETS="build/octoview-chrome.zip build/octoview-firefox.zip build/octoview-amo-source.zip"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" $ASSETS --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" $ASSETS \
+              --title "octoview $GITHUB_REF_NAME" \
+              --notes "${NOTES:-Release $GITHUB_REF_NAME}"
+          fi
