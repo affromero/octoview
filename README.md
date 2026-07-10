@@ -40,6 +40,18 @@ repos** because they can't authenticate as you. octoview can. It is a Safari ext
 your existing GitHub session: it adds a **Preview** button on any `blob` page, fetches the file with
 your cookies, and renders it in place. No service, no upload, no personal access token.
 
+### Why in the world would someone store a splat in GitHub?
+
+Not every splat is a city-scale capture. Small scenes, fixtures, product captures, visual regression
+assets, and the exact outputs attached to an experiment or demo often belong beside the code that
+created or consumes them. A repository gives those files an immutable commit, reviewable changes,
+release tags, and a shared place for collaborators to fetch the same artifact.
+
+That does not make GitHub a streaming CDN or an archive for enormous captures. Keep large or
+frequently replaced scenes in object storage, releases, or an asset pipeline—and commit a stable
+reference, preview image, or reduced sample instead. octoview is for the useful middle ground:
+opening a real, reasonably sized asset directly from the private repository where its context lives.
+
 ## What it previews
 
 Everything runs through one small, unit-tested core that dispatches by file extension. Each row is a
