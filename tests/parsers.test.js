@@ -110,9 +110,9 @@ describe('unzipNpz / unzip', () => {
   it('inflates DEFLATE zip entries (fflate) for a .splattie bundle', () => {
     const files = unzip(fixture('head.splattie'));
     expect(files.has('manifest.json')).toBe(true);
-    expect(files.has('splat.ply')).toBe(true);
     const manifest = JSON.parse(new TextDecoder().decode(files.get('manifest.json')));
     expect(manifest.format).toBe('splattie');
+    expect(files.has(manifest.avatar.splat.file)).toBe(true); // the base splat ply
   });
 });
 
