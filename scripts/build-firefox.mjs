@@ -37,7 +37,9 @@ const manifest = JSON.parse(await readFile(join(OUT, 'manifest.json'), 'utf8'));
 manifest.web_accessible_resources[0].resources =
   manifest.web_accessible_resources[0].resources.filter((r) => !SPARK_ONLY_VENDOR.includes(r));
 manifest.content_security_policy.extension_pages =
-  "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'";
+  "script-src 'self' 'wasm-unsafe-eval'; connect-src 'none'; object-src 'none'";
+// NOTE: use_dynamic_url is intentionally NOT set — it breaks the content
+// script's dynamic import() of render modules via getURL (see build-chrome.mjs).
 manifest.browser_specific_settings = {
   gecko: {
     id: 'octoview@afromero.co',

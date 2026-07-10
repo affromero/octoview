@@ -29,8 +29,17 @@ const manifest = JSON.parse(await readFile(join(OUT, 'manifest.json'), 'utf8'));
 // then CSP-fails in the viewer page and splats take the main-thread fallback
 // renderer, which test/chrome.e2e.mjs verifies.
 manifest.content_security_policy.extension_pages =
-  "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'";
+  "script-src 'self' 'wasm-unsafe-eval'; connect-src 'none'; object-src 'none'";
 manifest.sandbox = { pages: ['viewer.html'] };
+// The sandbox page hosts the report's own scripts; deny it network so a
+// malicious report cannot beacon "user viewed file X" back out. 'unsafe-inline'
+// is required for the inline capability probe (sandbox pages allow it).
+manifest.content_security_policy.sandbox =
+  "sandbox allow-scripts; script-src 'self' 'unsafe-inline'; connect-src 'none'; object-src 'none'";
+// NOTE: use_dynamic_url would blunt install fingerprinting, but it breaks the
+// content script's `import(getURL(...))` of the render modules (the fixed URL
+// stops resolving once resources are served at a rotating URL). A Low-severity
+// fingerprinting mitigation is not worth breaking module loading — left off.
 manifest.icons = Object.fromEntries(SIZES.map((s) => [s, `icons/icon${s}.png`]));
 await writeFile(join(OUT, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 

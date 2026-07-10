@@ -45,6 +45,6 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; worker-src 'self' blob:; child-src 'self' blob:; object-src 'none'"
+    "extension_pages": "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; worker-src 'self' blob:; child-src 'self' blob:; connect-src 'none'; object-src 'none'"
   }
 }
