@@ -78,6 +78,34 @@ Open any file below on GitHub and click **Preview** (after [installing](#develop
 - **Scientific images:** [render.hdr](samples/render.hdr) · [render.exr](samples/render.exr) · [depth.tiff](samples/depth.tiff)
 - **Reports and notebooks:** [report.html](samples/report.html) · [notebook.ipynb](samples/notebook.ipynb)
 
+<details>
+<summary><b>Screenshots</b> — what Preview looks like (click to expand)</summary>
+<br>
+
+_An HTML report rendered live — its own scripts run, sandboxed:_
+
+![Live HTML report](assets/screenshots/report.png)
+
+_A Gaussian splat capture:_
+
+![Gaussian splat](assets/screenshots/splat.png)
+
+_A colored point cloud:_
+
+![Point cloud](assets/screenshots/points.png)
+
+_A notebook with its interactive Plotly output kept:_
+
+![Notebook](assets/screenshots/notebook.png)
+
+_A Parquet table:_
+
+![Parquet table](assets/screenshots/table.png)
+
+Regenerate with `npm run screenshots` (writes store-resolution copies to `build/screenshots/`).
+
+</details>
+
 ## How it works
 
 Everything renders **inline in the blob view**, no new tab. Clicking **Preview** swaps the code for
