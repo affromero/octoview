@@ -48,7 +48,12 @@ const CASES = [
   {
     name: 'report.html',
     sample: 'samples/report.html',
-    ok: (r) => /Training report/.test(r.frameText) && /Validation loss/.test(r.frameText),
+    // 'not executed': the static-fallback state of the sample's script badge —
+    // under the github-like CSP the report's inline script must NOT run.
+    ok: (r) =>
+      /Training report/.test(r.frameText) &&
+      /Validation loss/.test(r.frameText) &&
+      /not executed/.test(r.frameText),
   },
   {
     name: 'notebook.ipynb',

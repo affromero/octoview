@@ -19,6 +19,10 @@ function sandboxFrame(html, cls) {
 try {
   const buf = await (await fetch(sample)).arrayBuffer();
   if (ext === '.html' || ext === '.htm') {
+    // DELIBERATE divergence from content.js: reportFrame needs the extension
+    // origin (browser.runtime.getURL), which no harness can fake — so this
+    // exercises its static fallback, which is exactly this sandboxFrame call.
+    // The live viewer path is verified manually in Safari.
     mount.appendChild(sandboxFrame(O.decode(buf), 'ov-frame'));
   } else if (ext === '.ipynb') {
     // Mirror of content.js plotlyChart, with a relative import (no browser.*).

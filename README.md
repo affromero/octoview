@@ -46,8 +46,8 @@ renderer. Status is **verified in WebKit (Safari's engine) by an automated rende
 
 | Type                           | Extensions                                         | Renderer                                                                           | Status |
 | ------------------------------ | -------------------------------------------------- | ---------------------------------------------------------------------------------- | :----: |
-| **HTML reports / plots**       | `.html` `.htm`                                     | sandboxed frame, inline; static HTML content                                       |   ✅   |
-| **Jupyter notebooks**          | `.ipynb`                                           | keeps the interactive outputs GitHub strips                                        |   ✅   |
+| **HTML reports / plots**       | `.html` `.htm`                                     | extension viewer frame: the report's own scripts run, sandboxed; static fallback   |   ✅   |
+| **Jupyter notebooks**          | `.ipynb`                                           | Plotly outputs render live from the MIME bundle; the rest GitHub strips is kept    |   ✅   |
 | **3D meshes and point clouds** | `.glb` `.gltf` `.obj` `.ply` `.pcd`                | three.js loaders (parsed on the main thread), gizmo + point sliders                |   ✅   |
 | **Gaussian splats**            | `.splat` `.ply` (3DGS + compressed) `.splattie`    | main-thread gaussian sprites, depth-sorted; standard and SuperSplat-compressed PLY |   ✅   |
 | **Model graphs**               | `.safetensors` `.gguf`                             | main-thread header parse to a tensor + metadata table                              |   ✅   |
@@ -58,33 +58,38 @@ renderer. Status is **verified in WebKit (Safari's engine) by an automated rende
 
 > **On WebKit.** Two Safari limits shape the design. (1) Renderers parse file bytes on the main
 > thread (three.js loaders, pure-JS parsers) because Safari cannot fetch a main-thread `blob:` URL
-> from inside a worker. (2) A report's own inline `<script>` tags cannot execute in a Safari
-> extension (github's CSP is inherited by in-page frames, and Safari does not honor sandbox pages),
-> so HTML reports and interactive outputs render as **static** HTML. Everything octoview draws
-> itself (3D, tables, arrays, images) is unaffected. Every format is verified in the WebKit harness.
+> from inside a worker. (2) A report's scripts cannot run in the blob page itself: github's CSP is
+> inherited by in-page frames, and Safari does not honor manifest sandbox pages. So octoview hosts
+> reports in its **own extension viewer page** — the one context whose CSP it controls — inside a
+> sandboxed frame where the report's scripts DO execute (opaque origin: no extension APIs, no
+> cookies). If the browser refuses the relaxed extension-page CSP, the report falls back to a
+> static in-page frame. Notebook Plotly outputs skip scripts entirely: their declarative MIME
+> bundle renders live through octoview's own vendored Plotly. Everything octoview draws itself
+> (3D, tables, arrays, images, Plotly charts) is unaffected. Every format is verified in the
+> WebKit harness.
 
 ## Try it from this repo
 
 Open any file below on GitHub and click **Preview** (after [installing](#develop)):
 
-| Sample                                                   | Shows                                       |
-| -------------------------------------------------------- | ------------------------------------------- |
-| [`samples/report.html`](samples/report.html)             | a self-contained HTML report                |
-| [`samples/notebook.ipynb`](samples/notebook.ipynb)       | a notebook whose interactive output is kept |
-| [`samples/cube.obj`](samples/cube.obj)                   | a mesh                                      |
-| [`samples/points.ply`](samples/points.ply)               | a colored point cloud                       |
-| [`samples/cloud.pcd`](samples/cloud.pcd)                 | a PCD point cloud                           |
-| [`samples/capybara.splat`](samples/capybara.splat)       | a Gaussian splat (antimatter15 `.splat`)    |
-| [`samples/capybara.ply`](samples/capybara.ply)           | a compressed (SuperSplat) 3DGS splat PLY    |
-| [`samples/head.splattie`](samples/head.splattie)         | a `.splattie` bundle (base splat rendered)  |
-| [`samples/array.npy`](samples/array.npy)                 | a NumPy array as a heatmap                  |
-| [`samples/array.npz`](samples/array.npz)                 | a compressed multi-array `.npz`             |
-| [`samples/metrics.parquet`](samples/metrics.parquet)     | a Parquet table                             |
-| [`samples/model.safetensors`](samples/model.safetensors) | a safetensors tensor list                   |
-| [`samples/model.gguf`](samples/model.gguf)               | a GGUF model header                         |
-| [`samples/depth.tiff`](samples/depth.tiff)               | a TIFF image                                |
-| [`samples/render.hdr`](samples/render.hdr)               | a Radiance HDR, tone-mapped                 |
-| [`samples/render.exr`](samples/render.exr)               | an OpenEXR image, tone-mapped               |
+| Sample                                                   | Shows                                                  |
+| -------------------------------------------------------- | ------------------------------------------------------ |
+| [`samples/report.html`](samples/report.html)             | an HTML report (badge turns LIVE when its scripts run) |
+| [`samples/notebook.ipynb`](samples/notebook.ipynb)       | a notebook with a live interactive Plotly chart        |
+| [`samples/cube.obj`](samples/cube.obj)                   | a mesh                                                 |
+| [`samples/points.ply`](samples/points.ply)               | a colored point cloud                                  |
+| [`samples/cloud.pcd`](samples/cloud.pcd)                 | a PCD point cloud                                      |
+| [`samples/capybara.splat`](samples/capybara.splat)       | a Gaussian splat (antimatter15 `.splat`)               |
+| [`samples/capybara.ply`](samples/capybara.ply)           | a compressed (SuperSplat) 3DGS splat PLY               |
+| [`samples/head.splattie`](samples/head.splattie)         | a `.splattie` bundle (base splat rendered)             |
+| [`samples/array.npy`](samples/array.npy)                 | a NumPy array as a heatmap                             |
+| [`samples/array.npz`](samples/array.npz)                 | a compressed multi-array `.npz`                        |
+| [`samples/metrics.parquet`](samples/metrics.parquet)     | a Parquet table                                        |
+| [`samples/model.safetensors`](samples/model.safetensors) | a safetensors tensor list                              |
+| [`samples/model.gguf`](samples/model.gguf)               | a GGUF model header                                    |
+| [`samples/depth.tiff`](samples/depth.tiff)               | a TIFF image                                           |
+| [`samples/render.hdr`](samples/render.hdr)               | a Radiance HDR, tone-mapped                            |
+| [`samples/render.exr`](samples/render.exr)               | an OpenEXR image, tone-mapped                          |
 
 ## How it works
 
@@ -98,10 +103,16 @@ the rendered file; clicking it again swaps back.
   not bind, so octoview's own renderers (three.js on a `<canvas>`, DOM tables, notebook cells) run
   right there in the page. Heavy renderers (the three.js bundle) are lazy-imported only when their
   file type is opened, so normal browsing stays light.
-- **Reports are static.** An HTML report's _own_ inline scripts cannot execute in a Safari extension
-  (github's CSP is inherited by in-page frames, and Safari does not honor sandbox pages), so reports
-  and interactive notebook outputs render in a sandboxed frame as static HTML. Script-generated
-  charts (a bare Plotly canvas) stay blank; everything octoview draws itself is unaffected.
+- **Reports run live, sandboxed.** A report's own scripts cannot run in the blob page (github's CSP
+  is inherited by in-page frames, and Safari does not honor manifest sandbox pages), so octoview
+  frames the report inside its own extension viewer page, whose CSP it controls. There the report
+  renders in a nested sandboxed frame where its scripts DO execute — in an opaque origin with no
+  extension APIs, no cookies, and no GitHub DOM. The viewer's inline handshake doubles as a
+  capability probe: if the browser refuses the relaxed extension-page CSP, octoview swaps in the
+  static in-page frame instead.
+- **Notebook Plotly charts need no scripts at all.** A Plotly output carries its chart spec as a
+  declarative MIME bundle (`application/vnd.plotly.v1+json`); octoview renders it live with its own
+  vendored Plotly running in the isolated world, the same CSP exemption the three.js renderers use.
 
 The dispatch, URL resolution, and notebook rendering live in
 [`extension/core.js`](extension/core.js), kept free of browser APIs so they run under Vitest.
@@ -165,6 +176,7 @@ extension/
   manifest.json        MV3 config (content scripts, web-accessible render modules)
   core.js              pure and DOM logic: dispatch, URL resolve, notebook render (unit-tested)
   content.js           github.com: button, fetch with cookies, inline render pane
+  viewer.html          extension page hosting a report's sandboxed live frame (CSP probe + fallback)
   render3d.js          three.js mesh and point-cloud renderer (gizmo, point sliders)
   render-splat.js      main-thread Gaussian splat renderer (.splat, 3DGS/compressed .ply, .splattie)
   render-array.js      .npy/.npz heatmap/image + raw-numbers view
@@ -173,7 +185,7 @@ extension/
   render-image.js      .exr/.hdr/.tiff tone-mapped to a canvas
   splat-decode.js      pure splat parsers (.splat, 3DGS .ply, .splattie); unit-tested
   unzip.js             shared ZIP reader (fflate) for .npz and .splattie
-  vendor/              self-contained libs (marked, three.js + loaders, hyparquet, fflate)
+  vendor/              self-contained libs (marked, three.js + loaders, hyparquet, fflate, plotly)
 samples/               one file per type, previewable from the repo
 tests/                 vitest suite over core.js
 test/harness.html/.js  stand-in blob page that drives the inline render path
