@@ -52,16 +52,25 @@
   const decode = (buf) => new TextDecoder().decode(buf);
   const joinLines = (v) => (Array.isArray(v) ? v.join('') : v || '');
 
+  // Plotly outputs carry their chart spec as a declarative MIME bundle — a plain
+  // {data, layout} object, no script execution needed — so a vendored Plotly can
+  // draw it live even where the report's own scripts are CSP-blocked.
+  const PLOTLY_MIME = 'application/vnd.plotly.v1+json';
+
   // `htmlFrame(html)` returns an element that renders the given HTML (the content
-  // script supplies a sandboxed iframe). Injecting it keeps this module browser-free
-  // and testable.
-  function renderOutput(out, wrap, htmlFrame) {
+  // script supplies a sandboxed iframe). `chart(spec)` (optional) returns an
+  // element that renders a Plotly MIME bundle live. Injecting both keeps this
+  // module browser-free and testable.
+  function renderOutput(out, wrap, htmlFrame, chart) {
     const data = out.data || {};
     if (out.output_type === 'stream') {
       addText(wrap, joinLines(out.text));
     } else if (out.output_type === 'error') {
       // eslint-disable-next-line no-control-regex -- strip ANSI color codes from tracebacks
       addText(wrap, joinLines(out.traceback).replace(/\x1b\[[0-9;]*m/g, ''), true);
+    } else if (chart && data[PLOTLY_MIME]) {
+      // Before text/html: Plotly emits both, and the html variant needs scripts.
+      wrap.appendChild(chart(data[PLOTLY_MIME]));
     } else if (data['text/html']) {
       wrap.appendChild(htmlFrame(joinLines(data['text/html'])));
     } else if (data['image/png'] || data['image/jpeg']) {
@@ -103,7 +112,7 @@
     wrap.appendChild(pre);
   }
 
-  function renderNotebook(nb, mount, htmlFrame) {
+  function renderNotebook(nb, mount, htmlFrame, chart) {
     const wrap = document.createElement('div');
     wrap.className = 'ov-nb';
     for (const cell of nb.cells || []) {
@@ -119,7 +128,7 @@
         pre.className = 'ov-code';
         pre.textContent = src;
         wrap.appendChild(pre);
-        for (const out of cell.outputs || []) renderOutput(out, wrap, htmlFrame);
+        for (const out of cell.outputs || []) renderOutput(out, wrap, htmlFrame, chart);
       }
     }
     mount.appendChild(wrap);

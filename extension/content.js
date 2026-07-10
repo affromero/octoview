@@ -116,7 +116,12 @@ async function render(pane, buf, ext) {
     pane.classList.add('ov-scroll');
     pane.style.maxHeight = '82vh';
     pane.style.overflow = 'auto';
-    O.renderNotebook(JSON.parse(O.decode(buf)), pane, (html) => sandboxFrame(html, 'ov-nb-out'));
+    O.renderNotebook(
+      JSON.parse(O.decode(buf)),
+      pane,
+      (html) => sandboxFrame(html, 'ov-nb-out'),
+      plotlyChart
+    );
   } else if (THREE_EXTS.includes(ext) || SPLAT_EXTS.includes(ext)) {
     pane.classList.add('ov-fill');
     pane.style.height = '78vh';
@@ -154,6 +159,26 @@ async function render(pane, buf, ext) {
   } else {
     msg(pane, 'No preview for ' + ext + ' yet.');
   }
+}
+
+// A Plotly MIME bundle renders LIVE: the vendored Plotly runs as our own code in
+// the isolated world (github's CSP does not bind it — same trick as three.js), so
+// the interactive chart GitHub strips works here without executing any notebook
+// script. The div returns synchronously; the lazy bundle fills it when loaded.
+function plotlyChart(spec) {
+  const div = document.createElement('div');
+  div.className = 'ov-nb-plotly';
+  // Plotly renders nothing into a zero-height box; honor the spec's height.
+  div.style.height = ((spec.layout && spec.layout.height) || 450) + 'px';
+  loadModule('vendor/plotly.esm.js')
+    .then(({ default: Plotly }) =>
+      Plotly.newPlot(div, spec.data || [], spec.layout || {}, {
+        responsive: true,
+        displaylogo: false,
+      })
+    )
+    .catch((e) => msg(div, "Couldn't render chart: " + e.message));
+  return div;
 }
 
 // A sandboxed frame runs the report/output's scripts in an opaque origin. Under
@@ -203,6 +228,7 @@ function ensureStyle() {
       font:12.5px/1.5 ui-monospace,monospace;white-space:pre-wrap;color:#adbac7}
     #${PANE_ID} .ov-nb-err{color:#ff7b72}
     #${PANE_ID} .ov-nb-out{width:100%;height:360px;border:1px solid #30363d;border-radius:6px;background:#fff;margin:0 0 12px}
+    #${PANE_ID} .ov-nb-plotly{width:100%;border:1px solid #30363d;border-radius:6px;background:#fff;margin:0 0 12px;overflow:hidden}
     #${PANE_ID} .ov-nb-img{max-width:100%;background:#fff;border-radius:6px;margin:0 0 12px}
     #${PANE_ID} .ov-arr-meta{padding:14px 18px 6px;font:12.5px/1.5 ui-monospace,monospace;color:#adbac7}
     #${PANE_ID} .ov-arr-canvas{display:block;margin:0 18px 18px;border:1px solid #30363d;border-radius:6px}

@@ -53,7 +53,8 @@ const CASES = [
   {
     name: 'notebook.ipynb',
     sample: 'samples/notebook.ipynb',
-    ok: (r) => /Notebook sample/.test(r.text),
+    // plotlySvg: the Plotly MIME output rendered LIVE by the vendored bundle.
+    ok: (r) => /Notebook sample/.test(r.text) && r.plotlySvg,
   },
   { name: 'cube.obj', sample: 'samples/cube.obj', ok: (r) => r.mainCanvas },
   { name: 'points.ply', sample: 'samples/points.ply', ok: (r) => r.mainCanvas },
@@ -141,9 +142,10 @@ for (const [label, engine] of [
       .waitForFunction(() => window.__ovReady || window.__ovError, { timeout: 8000 })
       .catch(() => {});
     await page.waitForTimeout(1500);
-    const { text, mainCanvas, err } = await page.evaluate(() => ({
+    const { text, mainCanvas, plotlySvg, err } = await page.evaluate(() => ({
       text: document.body.textContent,
       mainCanvas: !!document.querySelector('#mount canvas'),
+      plotlySvg: !!document.querySelector('#mount .js-plotly-plot svg'),
       err: window.__ovError || null,
     }));
     let frameText = '';
@@ -155,7 +157,7 @@ for (const [label, engine] of [
         /* frame gone */
       }
     }
-    const pass = !err && c.ok({ text, frameText, mainCanvas });
+    const pass = !err && c.ok({ text, frameText, mainCanvas, plotlySvg });
     // Note: a refused srcdoc inline script is EXPECTED (the Safari static-render
     // path), so CSP-refusal console noise is informational, not a failure.
     console.log(`${pass ? '✓' : '✗'} [${label}] ${c.name}${err ? '  ERROR: ' + err : ''}`);
