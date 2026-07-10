@@ -103,8 +103,11 @@ export function parseSplatBin(buf) {
     pos[i * 3] = dv.getFloat32(o, true);
     pos[i * 3 + 1] = dv.getFloat32(o + 4, true);
     pos[i * 3 + 2] = dv.getFloat32(o + 8, true);
-    size[i] =
-      (dv.getFloat32(o + 12, true) + dv.getFloat32(o + 16, true) + dv.getFloat32(o + 20, true)) / 3;
+    size[i] = Math.max(
+      dv.getFloat32(o + 12, true),
+      dv.getFloat32(o + 16, true),
+      dv.getFloat32(o + 20, true)
+    );
     col[i * 4] = dv.getUint8(o + 24) / 255;
     col[i * 4 + 1] = dv.getUint8(o + 25) / 255;
     col[i * 4 + 2] = dv.getUint8(o + 26) / 255;
@@ -151,7 +154,7 @@ function parseStandardPly(buf, h) {
     col[i * 4 + 1] = clamp01(0.5 + C0 * get(r, 'f_dc_1'));
     col[i * 4 + 2] = clamp01(0.5 + C0 * get(r, 'f_dc_2'));
     col[i * 4 + 3] = sigmoid(get(r, 'opacity'));
-    size[i] = Math.exp((get(r, 'scale_0') + get(r, 'scale_1') + get(r, 'scale_2')) / 3);
+    size[i] = Math.exp(Math.max(get(r, 'scale_0'), get(r, 'scale_1'), get(r, 'scale_2')));
   }
   return { count, pos, col, size };
 }
@@ -199,7 +202,7 @@ function parseCompressedPly(buf, h) {
     const sx = Math.exp((((ps >>> 21) & 2047) / 2047) * (cf(ci, 'max_scale_x', 0) - msx) + msx);
     const sy = Math.exp((((ps >>> 11) & 1023) / 1023) * (cf(ci, 'max_scale_y', 0) - msy) + msy);
     const sz = Math.exp(((ps & 2047) / 2047) * (cf(ci, 'max_scale_z', 0) - msz) + msz);
-    size[i] = (sx + sy + sz) / 3;
+    size[i] = Math.max(sx, sy, sz);
 
     const minr = cf(ci, 'min_r', 0);
     const ming = cf(ci, 'min_g', 0);

@@ -19,9 +19,34 @@ function sandboxFrame(html, cls) {
 try {
   const buf = await (await fetch(sample)).arrayBuffer();
   if (ext === '.html' || ext === '.htm') {
+    // DELIBERATE divergence from content.js: reportFrame needs the extension
+    // origin (browser.runtime.getURL), which no harness can fake — so this
+    // exercises its static fallback, which is exactly this sandboxFrame call.
+    // The live viewer path is verified manually in Safari.
     mount.appendChild(sandboxFrame(O.decode(buf), 'ov-frame'));
   } else if (ext === '.ipynb') {
-    O.renderNotebook(JSON.parse(O.decode(buf)), mount, (html) => sandboxFrame(html, 'ov-nb-out'));
+    // Mirror of content.js plotlyChart, with a relative import (no browser.*).
+    // A chart failure surfaces as __ovError so the e2e fails loudly.
+    const plotlyChart = (spec) => {
+      const div = document.createElement('div');
+      div.className = 'ov-nb-plotly';
+      div.style.height = ((spec.layout && spec.layout.height) || 450) + 'px';
+      import('/extension/vendor/plotly.esm.js')
+        .then(({ default: Plotly }) =>
+          Plotly.newPlot(div, spec.data || [], spec.layout || {}, {
+            responsive: true,
+            displaylogo: false,
+          })
+        )
+        .catch((e) => (window.__ovError = 'plotly: ' + ((e && e.message) || e)));
+      return div;
+    };
+    O.renderNotebook(
+      JSON.parse(O.decode(buf)),
+      mount,
+      (html) => sandboxFrame(html, 'ov-nb-out'),
+      plotlyChart
+    );
   } else if (ext === '.npy' || ext === '.npz') {
     const { renderArray } = await import('/extension/render-array.js');
     await renderArray(buf, mount, ext);

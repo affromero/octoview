@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>octoview report</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #fff;
+      }
+      iframe {
+        display: block;
+        width: 100%;
+        height: 100%;
+        border: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      // This script is inline ON PURPOSE: extension pages get the manifest's
+      // relaxed CSP ('unsafe-inline'), and whether Safari honors that is exactly
+      // what the content script needs to know. The ready beacon below only fires
+      // if inline scripts run here — the handshake doubles as the capability
+      // probe, and its absence makes the content script fall back to the static
+      // in-page frame.
+      addEventListener('message', (e) => {
+        // Only the octoview content script (posting as the github.com page) may
+        // hand us report HTML; a hostile site embedding this page is ignored.
+        if (e.origin !== 'https://github.com' || !e.data || e.data.type !== 'ov-report') return;
+        const f = document.createElement('iframe');
+        // The nested srcdoc frame inherits this page's relaxed CSP, so the
+        // report's own scripts EXECUTE — but sandboxed in an opaque origin:
+        // no browser.* APIs, no extension-permission fetch, no github cookies.
+        f.setAttribute('sandbox', 'allow-scripts');
+        f.srcdoc = e.data.html;
+        document.body.appendChild(f);
+      });
+      parent.postMessage({ type: 'ov-live-ready' }, '*');
+    </script>
+  </body>
+</html>
