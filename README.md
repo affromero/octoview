@@ -121,9 +121,20 @@ octoview is a browser extension, so the closest comparison is other GitHub exten
 
 The few extensions that DO render a file's contents are single-purpose and Chrome-only: a [Mermaid diagram renderer](https://chromewebstore.google.com/detail/mermaid-diagram-renderer/ahhjfofclhjllmiglebianajpmkabcbc) (largely superseded by GitHub's native Mermaid support), [three-hub](https://github.com/danielribeiro/three-hub) for 3D models, and an [ipynb viewer](https://chromewebstore.google.com/detail/ipynb-files-viewer/iohfdefnnffaejpacklikjbjhnfcmbej) for notebooks. None span the range octoview covers, and none ship on Safari.
 
+The Firefox build (`npm run build:firefox`) is a valid, `addons-linter`-clean MV3 package, but stays 🚧 until it's listed on AMO: Gecko has no sandbox-page mechanism, so live HTML reports fall back to the static frame there (same graceful path as Safari's probe fallback), and Spark's worker cannot run, so splats always use the main-thread renderer.
+
+### Why isn't this a PR to Refined GitHub?
+
+It comes up, so here is the reasoning:
+
+- **Different category of change.** Refined GitHub ships hundreds of small UI and workflow refinements and [explicitly scopes out](https://github.com/refined-github/refined-github/blob/main/contributing.md) niche features; a rendering engine for ML file formats is not a refinement, it's a product. The same applies to the file-tree and linking extensions.
+- **Payload.** octoview vendors ~13 MB of renderers (three.js, Plotly, Spark, hyparquet). Merging that into a lightweight extension would tax every user of the host extension for a feature most would never trigger.
+- **Permission and CSP surface.** Rendering live reports and WASM-backed viewers requires extension viewer pages with a carefully relaxed CSP (or Chrome sandbox pages) — a security surface a UI-refinement extension has no reason to carry.
+- **They compose.** Extensions are not exclusive: run Refined GitHub for the workflow polish and octoview for the file rendering. That composition is the extension model working as intended, not a gap to merge away.
+
 ## Roadmap
 
-- **Firefox port.** The Chrome build ships from this repo (`npm run build:chrome`); Gecko should follow with little change since the MV3 content-script model is portable. As in Chrome, several Safari-specific constraints relax there, so reports' own scripts run live.
+- **Firefox listing.** The AMO-ready package builds from this repo (`npm run build:firefox`, lint-clean); what remains is the listing itself and a runtime check in Gecko (Playwright cannot drive Firefox extensions, so that check is selenium/geckodriver work).
 - **More splat and graph coverage.** Promote the in-progress decoders (`.spz`, `.ksplat`, `.sog`) from experimental to verified, and add real model-graph rendering (ONNX via a Netron-style view) beyond today's tensor and metadata table.
 - **Other browsers and new formats: PRs welcome.** The renderer interface is a single extension-keyed dispatch, so adding a format is mostly one self-contained module plus a WebKit render test. Contributions are the fastest path to wider coverage.
 
