@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>octoview splat</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0d1117;
+        overflow: hidden;
+      }
+      canvas {
+        display: block;
+      }
+      #err {
+        color: #ff7b72;
+        font: 13px -apple-system, sans-serif;
+        padding: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Extension page: the manifest CSP allows 'unsafe-inline' + 'wasm-unsafe-eval'
+         and sets no worker-src, so Spark's inline blob worker and WASM (compiled on
+         the main thread, then transferred to the worker) run here, unlike the
+         github content-script context. This is embedded inline as an iframe in the
+         blob view; if github's CSP blocks the frame or Safari refuses the relaxed
+         extension-page CSP, no beacon arrives and the content script falls back to
+         the main-thread renderer. -->
+    <script>
+      // Fires only if this extension page loaded and inline scripts run here.
+      parent.postMessage({ type: 'ov-splat-ready' }, '*');
+    </script>
+    <script type="module">
+      import { THREE, OrbitControls, SparkRenderer, SplatMesh } from './vendor/spark.esm.js';
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setSize(innerWidth, innerHeight);
+      renderer.setClearColor(0x0d1117);
+      document.body.appendChild(renderer.domElement);
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.01, 2000);
+      camera.position.set(0, 0, 3);
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      scene.add(new SparkRenderer({ renderer }));
+
+      function frame(mesh) {
+        const box = new THREE.Box3().setFromObject(mesh);
+        if (box.isEmpty()) return;
+        const c = box.getCenter(new THREE.Vector3());
+        const s = box.getSize(new THREE.Vector3());
+        const d = Math.max(s.x, s.y, s.z) || 1;
+        camera.position.copy(c).add(new THREE.Vector3(0, 0, d * 2));
+        camera.near = d / 100;
+        camera.far = d * 100;
+        camera.updateProjectionMatrix();
+        controls.target.copy(c);
+        controls.update();
+      }
+
+      addEventListener('message', async (e) => {
+        if (e.origin !== 'https://github.com' || !e.data || e.data.type !== 'ov-splat') return;
+        try {
+          const mesh = new SplatMesh({
+            fileBytes: new Uint8Array(e.data.bytes),
+            fileName: e.data.fileName,
+          });
+          await mesh.initialized;
+          scene.add(mesh);
+          frame(mesh);
+          parent.postMessage({ type: 'ov-splat-ok', count: e.data.count || 0 }, '*');
+        } catch (err) {
+          document.body.innerHTML = '<div id="err">Spark failed: ' + err + '</div>';
+          parent.postMessage({ type: 'ov-splat-error', error: String(err) }, '*');
+        }
+      });
+
+      (function loop() {
+        requestAnimationFrame(loop);
+        controls.update();
+        renderer.render(scene, camera);
+      })();
+      addEventListener('resize', () => {
+        renderer.setSize(innerWidth, innerHeight);
+        camera.aspect = innerWidth / innerHeight;
+        camera.updateProjectionMatrix();
+      });
+    </script>
+  </body>
+</html>

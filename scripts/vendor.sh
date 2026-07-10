@@ -49,4 +49,17 @@ JS
 npx esbuild build/plotly.entry.mjs --bundle --format=esm --minify \
   --outfile=extension/vendor/plotly.esm.js
 
-echo "vendored: marked.min.js, three3d.esm.js, hyparquet.esm.js, plotly.esm.js"
+# Spark (@sparkjsdev/spark): full Gaussian-splat renderer. three is a peer dep so
+# esbuild dedupes it to one copy; the worker (inline blob) and WASM (inline
+# base64) come from the prebuilt dist. Runs in the splat-viewer extension page,
+# whose CSP allows workers + WASM. Lazy-loaded there only for splats.
+cat > build/spark.entry.mjs <<'JS'
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
+export { THREE, OrbitControls, SparkRenderer, SplatMesh };
+JS
+npx esbuild build/spark.entry.mjs --bundle --format=esm --minify \
+  --outfile=extension/vendor/spark.esm.js
+
+echo "vendored: marked.min.js, three3d.esm.js, hyparquet.esm.js, plotly.esm.js, spark.esm.js"
