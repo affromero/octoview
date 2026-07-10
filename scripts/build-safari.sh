@@ -11,6 +11,11 @@ xcrun safari-web-extension-converter extension/ \
   --macos-only --bundle-identifier co.afromero.octoview \
   --project-location ./Safari --no-open --force
 
+# The converter leaves the app-icon slots empty, which App Store review rejects.
+# Fill them from assets/logo.svg (Safari/ is regenerated, so this runs each time).
+ICONSET="$(find Safari -type d -name AppIcon.appiconset | head -1)"
+node scripts/appicon.mjs "$ICONSET"
+
 xcodebuild -project Safari/octoview/octoview.xcodeproj \
   -scheme octoview -configuration Release \
   -archivePath build/octoview.xcarchive \
