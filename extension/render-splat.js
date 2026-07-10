@@ -172,16 +172,23 @@ function view(splat, mount) {
   };
   frame();
 
-  // Back-to-front index sort for correct alpha. Throttled AND skipped when the
-  // camera has not moved, so a static preview does not peg the main thread.
+  // Back-to-front index sort for correct alpha, re-run every frame the camera
+  // moves (skipped while static so an idle preview does not peg the CPU).
   const idxAttr = geo.getIndex();
   const dir = new THREE.Vector3();
   const localCamera = new THREE.Vector3();
   const inverseRotation = new THREE.Quaternion();
   const depth = new Float32Array(splat.count);
+  // 16-bit counting sort (O(n)): fast enough to re-sort every frame the camera
+  // moves. A comparison sort was too slow at 200k+ splats, so it was throttled
+  // to ~12 Hz, which left the draw order stale during orbit and made far splats
+  // bleed through the near surface (see-through "holes").
+  const BUCKETS = 65536;
+  const counts = new Uint32Array(BUCKETS);
+  const starts = new Uint32Array(BUCKETS);
+  const keys = new Uint32Array(splat.count);
   const lastPos = new THREE.Vector3(Infinity, 0, 0);
   const lastQuat = new THREE.Quaternion(2, 0, 0, 0);
-  let lastSort = 0;
   const sort = () => {
     splatPoints.updateMatrixWorld();
     camera.getWorldDirection(dir);
@@ -192,13 +199,31 @@ function view(splat, mount) {
     const cx = localCamera.x;
     const cy = localCamera.y;
     const cz = localCamera.z;
-    for (let i = 0; i < splat.count; i++) {
-      depth[i] =
-        (splat.pos[i * 3] - cx) * dir.x +
-        (splat.pos[i * 3 + 1] - cy) * dir.y +
-        (splat.pos[i * 3 + 2] - cz) * dir.z;
+    const n = splat.count;
+    const pos = splat.pos;
+    let dmin = Infinity;
+    let dmax = -Infinity;
+    for (let i = 0; i < n; i++) {
+      const d =
+        (pos[i * 3] - cx) * dir.x + (pos[i * 3 + 1] - cy) * dir.y + (pos[i * 3 + 2] - cz) * dir.z;
+      depth[i] = d;
+      if (d < dmin) dmin = d;
+      if (d > dmax) dmax = d;
     }
-    order.sort((a, b) => depth[b] - depth[a]);
+    const scale = (BUCKETS - 1) / (dmax - dmin || 1);
+    counts.fill(0);
+    for (let i = 0; i < n; i++) {
+      const k = ((depth[i] - dmin) * scale) | 0;
+      keys[i] = k;
+      counts[k]++;
+    }
+    // Emit farthest (largest depth) first, so alpha blends back-to-front.
+    let acc = 0;
+    for (let k = BUCKETS - 1; k >= 0; k--) {
+      starts[k] = acc;
+      acc += counts[k];
+    }
+    for (let i = 0; i < n; i++) order[starts[keys[i]]++] = i;
     idxAttr.needsUpdate = true;
     lastPos.copy(camera.position);
     lastQuat.copy(camera.quaternion);
@@ -233,7 +258,7 @@ function view(splat, mount) {
 
   renderer.autoClear = false;
   const clock = new THREE.Clock();
-  (function loop(t) {
+  (function loop() {
     // When Preview is toggled off the pane (and canvas) leaves the DOM; tear the
     // loop and GPU resources down so repeated opens do not exhaust WebGL contexts.
     if (!renderer.domElement.isConnected) {
@@ -249,18 +274,14 @@ function view(splat, mount) {
     controls.update();
     uniforms.uSizeFactor.value =
       2 * renderer.domElement.height * camera.projectionMatrix.elements[5];
-    if (
-      t - lastSort > 80 &&
-      (!camera.position.equals(lastPos) || !camera.quaternion.equals(lastQuat))
-    ) {
+    if (!camera.position.equals(lastPos) || !camera.quaternion.equals(lastQuat)) {
       sort();
-      lastSort = t;
     }
     if (gizmo.animating) gizmo.update(dt);
     renderer.clear();
     renderer.render(scene, camera);
     if (gizmoOn) gizmo.render(renderer);
-  })(0);
+  })();
 }
 
 function buildPanel(mount, uniforms, count, renderer, onGizmo, onConvention) {
