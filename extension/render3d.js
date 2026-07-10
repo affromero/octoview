@@ -87,6 +87,9 @@ export function render3D(buf, mount, ext) {
   const frame = (obj) => {
     const c = new THREE.Box3().setFromObject(obj).getCenter(new THREE.Vector3());
     obj.position.sub(c);
+    // Don't frustum-cull the single previewed object (point clouds' sprites
+    // extend past their bounding sphere, so parts disappear at orbit angles).
+    obj.traverse((o) => (o.frustumCulled = false));
     pivot.add(obj);
     reframe();
   };

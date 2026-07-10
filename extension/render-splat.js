@@ -150,6 +150,11 @@ function view(splat, mount) {
       }`,
   });
   const splatPoints = new THREE.Points(geo, material);
+  // Never frustum-cull the one object we're previewing: three.js culls the whole
+  // Points object once its point-based bounding sphere leaves the frustum, but
+  // the gaussian sprites extend well beyond the points, so parts (or all) of the
+  // splat vanish at certain orbit angles. Culling saves nothing with one object.
+  splatPoints.frustumCulled = false;
   scene.add(splatPoints);
 
   // Frame the cloud.
