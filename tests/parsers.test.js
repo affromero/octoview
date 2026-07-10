@@ -452,3 +452,42 @@ describe('spark splat decoders (spz / ksplat / sog)', () => {
     expect(manifest.avatar.splat.format ?? 'ply').not.toBe('spz'); // fixture is ply-based
   });
 });
+
+describe('spz v4 (zstd stream container)', () => {
+  it('decodes the capybara .spz v4 to the reference geometry (RUB convention: y/z mirrored)', () => {
+    const s = parseSpz(fixture('capybara-v4.spz'));
+    const r = parseSplatBin(fixture('capybara.splat'));
+    expect(s.count).toBe(r.count);
+    // same scene, but spz v4 canonical coords negate y and z vs the source ply
+    const span = (arr, n, d) => {
+      let mn = 1e9,
+        mx = -1e9;
+      for (let i = 0; i < n; i++) {
+        const v = arr[i * 3 + d];
+        if (v < mn) mn = v;
+        if (v > mx) mx = v;
+      }
+      return [mn, mx];
+    };
+    for (let d = 0; d < 3; d++) {
+      const [smn, smx] = span(s.pos, s.count, d);
+      const [rmn, rmx] = span(r.pos, r.count, d);
+      // spans match in extent regardless of mirroring
+      expect(smx - smn).toBeCloseTo(rmx - rmn, 1);
+    }
+    let sa = 0,
+      ra = 0;
+    for (let i = 0; i < s.count; i++) {
+      sa += s.col[i * 4 + 3];
+      ra += r.col[i * 4 + 3];
+    }
+    expect(sa / s.count).toBeCloseTo(ra / r.count, 2);
+  });
+
+  it('rejects a v4 file with a corrupt stream table', () => {
+    const buf = new Uint8Array(fixture('capybara-v4.spz').slice(0, 64));
+    const dv = new DataView(buf.buffer);
+    dv.setUint32(16, 60, true); // toc points into garbage
+    expect(() => parseSpz(buf.buffer)).toThrow();
+  });
+});
