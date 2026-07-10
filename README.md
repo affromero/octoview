@@ -82,6 +82,7 @@ Open any file below on GitHub and click **Preview** (after [installing](#develop
 | [`samples/capybara.splat`](samples/capybara.splat)       | a Gaussian splat (antimatter15 `.splat`)               |
 | [`samples/capybara.ply`](samples/capybara.ply)           | a compressed (SuperSplat) 3DGS splat PLY               |
 | [`samples/head.splattie`](samples/head.splattie)         | a `.splattie` bundle (base splat rendered)             |
+| [`samples/butterfly.spz`](samples/butterfly.spz)         | an `.spz` splat (Spark renderer only)                  |
 | [`samples/array.npy`](samples/array.npy)                 | a NumPy array as a heatmap                             |
 | [`samples/array.npz`](samples/array.npz)                 | a compressed multi-array `.npz`                        |
 | [`samples/metrics.parquet`](samples/metrics.parquet)     | a Parquet table                                        |

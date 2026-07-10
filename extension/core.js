@@ -23,6 +23,8 @@
     '.tiff',
     '.splat',
     '.splattie',
+    '.spz',
+    '.ksplat',
   ];
 
   const extname = (name) => {

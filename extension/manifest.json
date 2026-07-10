@@ -15,6 +15,8 @@
     {
       "resources": [
         "viewer.html",
+        "splat-viewer.html",
+        "splat-viewer.js",
         "render3d.js",
         "render-array.js",
         "render-table.js",
@@ -24,6 +26,7 @@
         "splat-decode.js",
         "unzip.js",
         "vendor/three3d.esm.js",
+        "vendor/spark.esm.js",
         "vendor/plotly.esm.js",
         "vendor/hyparquet.esm.js",
         "vendor/fflate.esm.js"

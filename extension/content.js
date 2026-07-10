@@ -15,7 +15,7 @@ const ARRAY_EXTS = ['.npy', '.npz'];
 const TABLE_EXTS = ['.parquet'];
 const MODEL_EXTS = ['.safetensors', '.gguf'];
 const IMAGE_EXTS = ['.exr', '.hdr', '.tif', '.tiff'];
-const SPLAT_EXTS = ['.splat', '.splattie'];
+const SPLAT_EXTS = ['.splat', '.splattie', '.spz', '.ksplat'];
 
 // Cheap header sniff: a 3DGS .ply carries gaussian props; a plain .ply does not.
 // Lets us route .ply to the splat vs the mesh/point-cloud renderer without
@@ -126,8 +126,7 @@ async function render(pane, buf, ext) {
     pane.classList.add('ov-fill');
     pane.style.height = '78vh';
     if (SPLAT_EXTS.includes(ext) || (ext === '.ply' && isPlySplatHead(buf))) {
-      const { renderSplat } = await loadModule('render-splat.js');
-      renderSplat(buf, pane, ext);
+      pane.appendChild(await splatFrame(buf, ext));
     } else {
       const { render3D } = await loadModule('render3d.js');
       render3D(buf, pane, ext);
@@ -208,6 +207,57 @@ function reportFrame(html) {
     e.source.postMessage({ type: 'ov-report', html }, new URL(viewerUrl).origin);
   }
   addEventListener('message', onReady);
+  return f;
+}
+
+// Spark reads .ply/.splat/.spz/.ksplat from raw bytes; .splattie is a ZIP whose
+// manifest points at the base splat, which we unwrap here.
+async function splatBytes(buf, ext) {
+  if (ext !== '.splattie') return { bytes: buf, fileName: 'splat' + ext };
+  const { unzip, toBuffer } = await loadModule('unzip.js');
+  const files = unzip(buf);
+  const manifest = JSON.parse(new TextDecoder().decode(files.get('manifest.json')));
+  const file = manifest.avatar.splat.file;
+  return { bytes: toBuffer(files.get(file)), fileName: file };
+}
+
+// Render a splat with Spark inside the extension's splat-viewer page (embedded
+// inline as an iframe, the one context whose CSP allows Spark's worker + WASM).
+// If the extension frame is blocked, or Spark cannot start (no beacon / error /
+// timeout), fall back to the main-thread renderer, which needs no worker or WASM.
+async function splatFrame(buf, ext) {
+  const { bytes, fileName } = await splatBytes(buf, ext);
+  const viewerUrl = browser.runtime.getURL('splat-viewer.html');
+  const f = document.createElement('iframe');
+  f.className = 'ov-frame';
+  let settled = false;
+  const timer = setTimeout(() => fallback(), 12000);
+  function fallback() {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    removeEventListener('message', onMsg);
+    const mount = document.createElement('div');
+    mount.className = 'ov-fill';
+    mount.style.height = '78vh';
+    f.replaceWith(mount);
+    loadModule('render-splat.js').then(({ renderSplat }) => renderSplat(buf, mount, ext));
+  }
+  function onMsg(e) {
+    if (e.source !== f.contentWindow || !e.data) return;
+    if (e.data.type === 'ov-splat-ready') {
+      f.contentWindow.postMessage({ type: 'ov-splat', bytes, fileName }, new URL(viewerUrl).origin);
+    } else if (e.data.type === 'ov-splat-ok') {
+      settled = true;
+      clearTimeout(timer);
+      removeEventListener('message', onMsg);
+    } else if (e.data.type === 'ov-splat-error') {
+      console.warn('[octoview] Spark path failed, falling back to sprites:', e.data.error);
+      fallback();
+    }
+  }
+  addEventListener('message', onMsg);
+  f.src = viewerUrl;
   return f;
 }
 
