@@ -48,6 +48,30 @@ describe('parser DoS hardening', () => {
     expect(Date.now() - t0).toBeLessThan(1000);
   });
 
+  it('LCC: overlapping index records that sum past data.bin are rejected', async () => {
+    const { parseLcc } = await import('../extension/lcc-decode.js');
+    const meta = new TextEncoder().encode(
+      JSON.stringify({
+        totalLevel: 1,
+        splats: [{}],
+        attributes: [{ name: 'scale', min: [0, 0, 0], max: [1, 1, 1] }],
+      })
+    );
+    // data.bin holds 2 splats (64 bytes); two index units each claim both, at
+    // the same offset — summed count 4 > 2, so it must throw, not allocate.
+    const data = new Uint8Array(64);
+    const stride = 4 + 1 * 16; // 20
+    const index = new Uint8Array(2 * stride);
+    const dv = new DataView(index.buffer);
+    for (let u = 0; u < 2; u++) {
+      const o = u * stride + 4;
+      dv.setInt32(o, 2, true); // count = 2
+      dv.setBigInt64(o + 4, 0n, true); // dataOffset = 0 (overlap)
+      dv.setInt32(o + 12, 64, true); // size >= count*32
+    }
+    expect(() => parseLcc(meta, index, data)).toThrow(/more splats than data\.bin/);
+  });
+
   it('SOG: a count larger than the data images is rejected, not read OOB', async () => {
     const meta = {
       version: 2,
