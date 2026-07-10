@@ -2,6 +2,8 @@
 // index.bin and data.bin (plus optional shcoef.bin/environment.bin). The preview
 // uses the base colour and scale data from every LOD; SH is intentionally left to
 // full LCC viewers because the lightweight renderer has no SH shader.
+const MAX_SPLATS = 800000; // matches splat-decode.js: subsample to keep the sort snappy
+
 export function parseLcc(metaBytes, indexBytes, dataBytes) {
   metaBytes = bytes(metaBytes);
   indexBytes = bytes(indexBytes);
@@ -38,14 +40,23 @@ export function parseLcc(metaBytes, indexBytes, dataBytes) {
     }
   }
 
-  const count = records.reduce((total, record) => total + record.count, 0);
+  const total = records.reduce((sum, record) => sum + record.count, 0);
+  // A record's count is bounds-checked against data.bin individually, but many
+  // records can point at the SAME offset — so a crafted index.bin could sum to a
+  // count far larger than data.bin holds and OOM the tab. Real (non-overlapping)
+  // LODs can't sum past data.bin/32 splats; refuse anything beyond that, then
+  // subsample to MAX_SPLATS like every other splat decoder.
+  if (total > Math.floor(dataBytes.byteLength / 32))
+    throw new Error('LCC index declares more splats than data.bin holds');
+  const count = Math.min(total, MAX_SPLATS);
   const pos = new Float32Array(count * 3);
   const col = new Float32Array(count * 4);
   const size = new Float32Array(count);
   const data = view(dataBytes);
   let out = 0;
   for (const record of records) {
-    for (let i = 0; i < record.count; i++, out++) {
+    if (out >= count) break;
+    for (let i = 0; i < record.count && out < count; i++, out++) {
       const offset = record.dataOffset + i * 32;
       pos[out * 3] = data.getFloat32(offset, true);
       pos[out * 3 + 1] = data.getFloat32(offset + 4, true);
