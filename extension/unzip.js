@@ -1,4 +1,4 @@
-// Generic ZIP reader used by the .npz and .splattie renderers. Uses fflate's
+// Generic ZIP reader used by the .npz and .sog renderers. Uses fflate's
 // pure-JS unzipSync (no Worker, no DecompressionStream) so it is WebKit safe on
 // every Safari version and handles store, deflate, data descriptors and ZIP64.
 import { unzipSync } from './vendor/fflate.esm.js';

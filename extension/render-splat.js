@@ -1,14 +1,14 @@
-// octoview Gaussian-splat renderer, lazy-imported inline for .splat, 3DGS .ply and
-// .splattie. Spark and other splat viewers load in a Worker and fetch a blob URL,
-// which WebKit refuses, so this parses the splat on the MAIN thread (see
-// splat-decode.js) and draws depth-sorted gaussian point sprites via three.js.
-// Isotropic (no covariance ellipse), which is enough for a preview. Sorting
-// reorders only the index buffer (cheap) so alpha blending is back-to-front correct.
+// octoview Gaussian-splat renderer. Draws TRUE anisotropic gaussians (oriented
+// covariance ellipses, EWA splatting) in pure WebGL2 on the MAIN thread — no
+// worker, no WASM, no eval, no blob — so it runs under the strict extension CSP
+// in every browser (Safari, Chrome, Firefox) with zero relaxation. splat-decode.js
+// parses the file into per-splat center + color + scale + rotation; this projects
+// each 3D covariance to a 2D screen-space conic, sorts back-to-front every frame
+// (counting sort), and composites. See the README "Why not Spark" note.
 import { THREE, OrbitControls, ViewHelper } from './vendor/three3d.esm.js';
 import {
   parseSplatBin,
   parsePlySplat,
-  parseSplattie,
   parseSpz,
   parseKsplat,
   parseSog,
@@ -18,14 +18,14 @@ import {
 
 export { isPlySplat };
 
-// Source coordinate systems match the general 3D renderer. three.js uses
-// OpenGL's Y-up orientation, so these rotations reinterpret incoming splats.
 const X = new THREE.Vector3(1, 0, 0);
 const CONVENTIONS = {
   'OpenGL (Y-up)': new THREE.Quaternion(),
   'Z-up (Blender, ROS, CAD)': new THREE.Quaternion().setFromAxisAngle(X, -Math.PI / 2),
   'OpenCV (Y-down, Z-fwd)': new THREE.Quaternion().setFromAxisAngle(X, Math.PI),
 };
+
+const SPLATS_PER_ROW = 1024; // data-texture packing (4 texels/splat per row)
 
 // Decode a webp data texture to raw RGBA without alpha premultiplication — a 2D
 // canvas premultiplies and corrupts the color channels of low-alpha pixels
@@ -64,15 +64,13 @@ export async function renderSplat(buf, mount, ext) {
     const splat =
       ext === '.splat'
         ? parseSplatBin(buf)
-        : ext === '.splattie'
-          ? await parseSplattie(buf)
-          : ext === '.spz'
-            ? parseSpz(buf)
-            : ext === '.ksplat'
-              ? parseKsplat(buf)
-              : ext === '.sog'
-                ? await parseSog(buf, decodeImage)
-                : parsePlySplat(buf);
+        : ext === '.spz'
+          ? parseSpz(buf)
+          : ext === '.ksplat'
+            ? parseKsplat(buf)
+            : ext === '.sog'
+              ? await parseSog(buf, decodeImage)
+              : parsePlySplat(buf);
     if (!splat.count) throw new Error('no splats found');
     view(splat, mount);
   } catch (e) {
@@ -92,6 +90,129 @@ export function renderLcc(metaBytes, indexBytes, dataBytes, mount) {
   }
 }
 
+// Build the per-splat data texture: 4 RGBA32F texels/splat holding center, the
+// 3D covariance (Sigma = R S^2 R^T from the decoded quat + 3 scales), and color.
+// Computing covariance once here (not per frame) keeps the vertex shader cheap.
+function buildDataTexture(splat) {
+  const { count, pos, col, scale, quat } = splat;
+  const rows = Math.ceil(count / SPLATS_PER_ROW);
+  const W = SPLATS_PER_ROW * 4;
+  const data = new Float32Array(W * rows * 4);
+  for (let i = 0; i < count; i++) {
+    const sx = scale[i * 3],
+      sy = scale[i * 3 + 1],
+      sz = scale[i * 3 + 2];
+    let qx = quat[i * 4],
+      qy = quat[i * 4 + 1],
+      qz = quat[i * 4 + 2],
+      qw = quat[i * 4 + 3];
+    const ql = Math.hypot(qx, qy, qz, qw) || 1;
+    qx /= ql;
+    qy /= ql;
+    qz /= ql;
+    qw /= ql;
+    // R (columns) from the quaternion, then M = R * diag(scale), Sigma = M M^T.
+    const r00 = 1 - 2 * (qy * qy + qz * qz),
+      r01 = 2 * (qx * qy - qw * qz),
+      r02 = 2 * (qx * qz + qw * qy);
+    const r10 = 2 * (qx * qy + qw * qz),
+      r11 = 1 - 2 * (qx * qx + qz * qz),
+      r12 = 2 * (qy * qz - qw * qx);
+    const r20 = 2 * (qx * qz - qw * qy),
+      r21 = 2 * (qy * qz + qw * qx),
+      r22 = 1 - 2 * (qx * qx + qy * qy);
+    const m00 = r00 * sx,
+      m01 = r01 * sy,
+      m02 = r02 * sz;
+    const m10 = r10 * sx,
+      m11 = r11 * sy,
+      m12 = r12 * sz;
+    const m20 = r20 * sx,
+      m21 = r21 * sy,
+      m22 = r22 * sz;
+    const b = ((i >> 10) * W + (i & 1023) * 4) * 4;
+    data[b] = pos[i * 3];
+    data[b + 1] = pos[i * 3 + 1];
+    data[b + 2] = pos[i * 3 + 2];
+    data[b + 3] = m00 * m00 + m01 * m01 + m02 * m02; // cov00
+    data[b + 4] = m00 * m10 + m01 * m11 + m02 * m12; // cov01
+    data[b + 5] = m00 * m20 + m01 * m21 + m02 * m22; // cov02
+    data[b + 6] = m10 * m10 + m11 * m11 + m12 * m12; // cov11
+    data[b + 7] = m10 * m20 + m11 * m21 + m12 * m22; // cov12
+    data[b + 8] = m20 * m20 + m21 * m21 + m22 * m22; // cov22
+    data[b + 9] = col[i * 4];
+    data[b + 10] = col[i * 4 + 1];
+    data[b + 11] = col[i * 4 + 2];
+    data[b + 12] = col[i * 4 + 3];
+  }
+  const tex = new THREE.DataTexture(data, W, rows, THREE.RGBAFormat, THREE.FloatType);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+const VERTEX = `
+in vec3 position;     // base quad corner in [-2,2] (z unused; named 'position' so
+                      // three.js's instanced draw path recognizes the geometry)
+in float splatIndex;  // splat drawn by this instance (sorted order)
+#define quad position.xy
+uniform highp sampler2D uData;
+uniform mat4 modelViewMatrix, projectionMatrix;
+uniform vec2 uViewport;
+uniform float uScale, uFalloff;
+out vec4 vColor;
+out vec2 vPos;
+void main(){
+  int id = int(splatIndex);
+  int bx = (id & 1023) * 4, by = id >> 10;
+  vec4 t0 = texelFetch(uData, ivec2(bx,   by), 0); // center.xyz, cov00
+  vec4 t1 = texelFetch(uData, ivec2(bx+1, by), 0); // cov01,02,11,12
+  vec4 t2 = texelFetch(uData, ivec2(bx+2, by), 0); // cov22, color.rgb
+  vec4 t3 = texelFetch(uData, ivec2(bx+3, by), 0); // color.a
+  vec4 cam = modelViewMatrix * vec4(t0.xyz, 1.0);
+  vec4 clip = projectionMatrix * cam;
+  if (clip.w <= 0.0 || abs(clip.x) > 1.3*clip.w || abs(clip.y) > 1.3*clip.w){
+    gl_Position = vec4(0.0, 0.0, 2.0, 1.0); return;
+  }
+  // Size slider scales the gaussian footprint (covariance ~ scale^2).
+  mat3 Vrk = mat3(t0.w, t1.x, t1.y,  t1.x, t1.z, t1.w,  t1.y, t1.w, t2.x) * (uScale * uScale);
+  vec2 focal = vec2(projectionMatrix[0][0], projectionMatrix[1][1]) * 0.5 * uViewport;
+  mat3 J = mat3(
+    focal.x/cam.z, 0.0, -(focal.x*cam.x)/(cam.z*cam.z),
+    0.0, focal.y/cam.z, -(focal.y*cam.y)/(cam.z*cam.z),
+    0.0, 0.0, 0.0);
+  mat3 W = mat3(modelViewMatrix);
+  mat3 T = W * J;
+  mat3 cov2d = transpose(T) * Vrk * T;
+  cov2d[0][0] += 0.3; cov2d[1][1] += 0.3; // low-pass so a splat is never sub-pixel
+  float mid = 0.5*(cov2d[0][0]+cov2d[1][1]);
+  float rad = length(vec2((cov2d[0][0]-cov2d[1][1])*0.5, cov2d[0][1]));
+  float l1 = mid+rad, l2 = max(mid-rad, 0.1);
+  // Guard the eigenvector against a near-circular conic: normalize(0,0) is NaN,
+  // which would collapse the whole quad and drop the splat. Fall back to the x
+  // axis (orientation is irrelevant when the gaussian is circular).
+  vec2 ev = vec2(cov2d[0][1], l1 - cov2d[0][0]);
+  vec2 dir = length(ev) > 1e-9 ? normalize(ev) : vec2(1.0, 0.0);
+  vec2 major = min(sqrt(2.0*l1), 1024.0) * dir;
+  vec2 minor = min(sqrt(2.0*l2), 1024.0) * vec2(dir.y, -dir.x);
+  vColor = vec4(t2.yzw, t3.x);
+  vPos = quad / uFalloff;
+  vec2 off = (quad.x*major + quad.y*minor) / uViewport * 2.0;
+  gl_Position = vec4(clip.xy/clip.w + off, clip.z/clip.w, 1.0);
+}`;
+
+const FRAGMENT = `
+precision highp float;
+in vec4 vColor; in vec2 vPos;
+uniform float uOpacity;
+out vec4 outColor;
+void main(){
+  float A = -dot(vPos, vPos);
+  if (A < -4.0) discard;
+  float a = exp(A) * vColor.a * uOpacity;
+  if (a < 0.004) discard;
+  outColor = vec4(vColor.rgb, a);
+}`;
+
 function view(splat, mount) {
   const w = mount.clientWidth || 800;
   const h = mount.clientHeight || 600;
@@ -106,63 +227,54 @@ function view(splat, mount) {
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
 
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(splat.pos, 3));
-  geo.setAttribute('color', new THREE.BufferAttribute(splat.col, 4));
-  geo.setAttribute('size', new THREE.BufferAttribute(splat.size, 1));
-  const order = new Uint32Array(splat.count);
-  for (let i = 0; i < splat.count; i++) order[i] = i;
-  geo.setIndex(new THREE.Uint32BufferAttribute(order, 1));
-
-  // uSizeFactor maps a world-space gaussian radius to screen pixels
-  // (2 * viewportHeightPx * projection[1][1], covering ~2 std devs so the round
-  // sprites overlap into a surface instead of reading as separate points). It is
-  // refreshed each frame below because it depends on the viewport and projection.
+  const dataTex = buildDataTexture(splat);
   const uniforms = {
+    uData: { value: dataTex },
+    uViewport: { value: new THREE.Vector2(w, h) },
     uScale: { value: 1 },
     uOpacity: { value: 1 },
     uFalloff: { value: 1 },
-    uSizeFactor: { value: 1200 },
   };
-  const material = new THREE.ShaderMaterial({
+  const material = new THREE.RawShaderMaterial({
+    glslVersion: THREE.GLSL3,
     uniforms,
+    vertexShader: VERTEX,
+    fragmentShader: FRAGMENT,
     transparent: true,
-    depthTest: true,
+    depthTest: false,
     depthWrite: false,
+    // The projected covariance flips the quad's winding for roughly half the
+    // splats, so cull nothing — a FrontSide material would drop them.
+    side: THREE.DoubleSide,
     blending: THREE.NormalBlending,
-    vertexShader: `
-      attribute vec4 color; attribute float size;
-      uniform float uScale; uniform float uSizeFactor;
-      varying vec4 vColor;
-      void main(){
-        vColor = color;
-        vec4 mv = modelViewMatrix * vec4(position,1.0);
-        gl_Position = projectionMatrix * mv;
-        gl_PointSize = clamp(size * uScale * uSizeFactor / -mv.z, 1.5, 512.0);
-      }`,
-    fragmentShader: `
-      varying vec4 vColor; uniform float uOpacity; uniform float uFalloff;
-      void main(){
-        float d = length(gl_PointCoord - 0.5) * 2.0;
-        float a = exp(-4.0 * d * d * uFalloff);
-        if (a < 0.02) discard;
-        gl_FragColor = vec4(vColor.rgb, vColor.a * a * uOpacity);
-      }`,
   });
-  const splatPoints = new THREE.Points(geo, material);
-  // Never frustum-cull the one object we're previewing: three.js culls the whole
-  // Points object once its point-based bounding sphere leaves the frustum, but
-  // the gaussian sprites extend well beyond the points, so parts (or all) of the
-  // splat vanish at certain orbit angles. Culling saves nothing with one object.
-  splatPoints.frustumCulled = false;
-  scene.add(splatPoints);
 
-  // Frame the cloud.
+  // One instanced quad per splat; a per-instance splatIndex picks its data texel
+  // and is rewritten each frame to draw back-to-front.
+  const geo = new THREE.InstancedBufferGeometry();
+  geo.setAttribute(
+    'position',
+    new THREE.BufferAttribute(new Float32Array([-2, -2, 0, 2, -2, 0, 2, 2, 0, -2, 2, 0]), 3)
+  );
+  geo.setIndex([0, 1, 2, 0, 2, 3]);
+  const order = new Float32Array(splat.count);
+  for (let i = 0; i < splat.count; i++) order[i] = i;
+  const orderAttr = new THREE.InstancedBufferAttribute(order, 1);
+  orderAttr.setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute('splatIndex', orderAttr);
+  geo.instanceCount = splat.count;
+  const splatMesh = new THREE.Mesh(geo, material);
+  splatMesh.frustumCulled = false;
+  scene.add(splatMesh);
+
+  // Frame the cloud from its point bounds.
+  const box = new THREE.Box3();
+  const pt = new THREE.Vector3();
+  for (let i = 0; i < splat.count; i++)
+    box.expandByPoint(pt.set(splat.pos[i * 3], splat.pos[i * 3 + 1], splat.pos[i * 3 + 2]));
+  const center = box.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(...box.getSize(new THREE.Vector3()).toArray()) || 1;
   const frame = () => {
-    const box = new THREE.Box3().setFromObject(splatPoints);
-    const center = box.getCenter(new THREE.Vector3());
-    const sizeV = box.getSize(new THREE.Vector3());
-    const maxDim = Math.max(sizeV.x, sizeV.y, sizeV.z) || 1;
     camera.position.copy(center).add(new THREE.Vector3(0, 0, maxDim * 1.8));
     camera.near = maxDim / 100;
     camera.far = maxDim * 100;
@@ -172,17 +284,13 @@ function view(splat, mount) {
   };
   frame();
 
-  // Back-to-front index sort for correct alpha, re-run every frame the camera
-  // moves (skipped while static so an idle preview does not peg the CPU).
-  const idxAttr = geo.getIndex();
+  // Back-to-front counting sort (16-bit, O(n)) into the splatIndex attribute,
+  // re-run every frame the camera moves (idle stays static so it does not peg
+  // the CPU). Correct order is what makes alpha blending read as a solid surface.
   const dir = new THREE.Vector3();
   const localCamera = new THREE.Vector3();
   const inverseRotation = new THREE.Quaternion();
   const depth = new Float32Array(splat.count);
-  // 16-bit counting sort (O(n)): fast enough to re-sort every frame the camera
-  // moves. A comparison sort was too slow at 200k+ splats, so it was throttled
-  // to ~12 Hz, which left the draw order stale during orbit and made far splats
-  // bleed through the near surface (see-through "holes").
   const BUCKETS = 65536;
   const counts = new Uint32Array(BUCKETS);
   const starts = new Uint32Array(BUCKETS);
@@ -190,19 +298,19 @@ function view(splat, mount) {
   const lastPos = new THREE.Vector3(Infinity, 0, 0);
   const lastQuat = new THREE.Quaternion(2, 0, 0, 0);
   const sort = () => {
-    splatPoints.updateMatrixWorld();
+    splatMesh.updateMatrixWorld();
     camera.getWorldDirection(dir);
-    splatPoints.getWorldQuaternion(inverseRotation).invert();
+    splatMesh.getWorldQuaternion(inverseRotation).invert();
     dir.applyQuaternion(inverseRotation);
     localCamera.copy(camera.position);
-    splatPoints.worldToLocal(localCamera);
-    const cx = localCamera.x;
-    const cy = localCamera.y;
-    const cz = localCamera.z;
+    splatMesh.worldToLocal(localCamera);
+    const cx = localCamera.x,
+      cy = localCamera.y,
+      cz = localCamera.z;
     const n = splat.count;
     const pos = splat.pos;
-    let dmin = Infinity;
-    let dmax = -Infinity;
+    let dmin = Infinity,
+      dmax = -Infinity;
     for (let i = 0; i < n; i++) {
       const d =
         (pos[i * 3] - cx) * dir.x + (pos[i * 3 + 1] - cy) * dir.y + (pos[i * 3 + 2] - cz) * dir.z;
@@ -217,14 +325,14 @@ function view(splat, mount) {
       keys[i] = k;
       counts[k]++;
     }
-    // Emit farthest (largest depth) first, so alpha blends back-to-front.
+    // Farthest (largest depth) first → alpha blends back-to-front.
     let acc = 0;
     for (let k = BUCKETS - 1; k >= 0; k--) {
       starts[k] = acc;
       acc += counts[k];
     }
     for (let i = 0; i < n; i++) order[starts[keys[i]]++] = i;
-    idxAttr.needsUpdate = true;
+    orderAttr.needsUpdate = true;
     lastPos.copy(camera.position);
     lastQuat.copy(camera.quaternion);
   };
@@ -240,7 +348,7 @@ function view(splat, mount) {
     renderer,
     (on) => (gizmoOn = on),
     (convention) => {
-      splatPoints.quaternion.copy(CONVENTIONS[convention]);
+      splatMesh.quaternion.copy(CONVENTIONS[convention]);
       frame();
       sort();
     }
@@ -254,9 +362,14 @@ function view(splat, mount) {
     renderer.setSize(W, H);
     camera.aspect = W / H;
     camera.updateProjectionMatrix();
+    uniforms.uViewport.value.set(W * renderer.getPixelRatio(), H * renderer.getPixelRatio());
   };
   window.addEventListener('resize', onResize);
+  uniforms.uViewport.value.set(w * renderer.getPixelRatio(), h * renderer.getPixelRatio());
 
+  // Manual clear: the ViewHelper gizmo renders its own scene after ours, and with
+  // autoClear on that inner render would wipe the whole color buffer (clearing the
+  // splats). Clear once per frame ourselves, then draw scene + gizmo over it.
   renderer.autoClear = false;
   const clock = new THREE.Clock();
   (function loop() {
@@ -266,6 +379,7 @@ function view(splat, mount) {
       window.removeEventListener('resize', onResize);
       geo.dispose();
       material.dispose();
+      dataTex.dispose();
       renderer.dispose();
       renderer.forceContextLoss();
       return;
@@ -273,14 +387,10 @@ function view(splat, mount) {
     requestAnimationFrame(loop);
     const dt = clock.getDelta();
     controls.update();
-    uniforms.uSizeFactor.value =
-      2 * renderer.domElement.height * camera.projectionMatrix.elements[5];
-    if (!camera.position.equals(lastPos) || !camera.quaternion.equals(lastQuat)) {
-      sort();
-    }
-    if (gizmo.animating) gizmo.update(dt);
+    if (!camera.position.equals(lastPos) || !camera.quaternion.equals(lastQuat)) sort();
     renderer.clear();
     renderer.render(scene, camera);
+    if (gizmo.animating) gizmo.update(dt);
     if (gizmoOn) gizmo.render(renderer);
   })();
 }
@@ -311,31 +421,21 @@ function buildPanel(mount, uniforms, count, renderer, onGizmo, onConvention) {
   coords.appendChild(coordSelect);
   panel.appendChild(coords);
   panel.appendChild(slider('Size', 0.1, 4, 0.05, 1, (v) => (uniforms.uScale.value = v)));
-  // Min 0.02 (not 0.1): with 200k+ heavily overlapping gaussians, 0.1 still
-  // composites to a solid surface. Only near 0.02-0.03 does the opacity fade
-  // enough to reveal the underlying means (the splat centers) as a translucent
-  // cloud, which is the point of an opacity control here. Fine 0.01 step so that
-  // low, useful range is adjustable.
-  panel.appendChild(slider('Opacity', 0.02, 1, 0.01, 1, (v) => (uniforms.uOpacity.value = v)));
-  panel.appendChild(slider('Falloff', 0, 1, 0.05, 1, (v) => (uniforms.uFalloff.value = v)));
+  panel.appendChild(slider('Opacity', 0.05, 1, 0.01, 1, (v) => (uniforms.uOpacity.value = v)));
+  // Falloff sharpens/softens the gaussian edge (divides the sample radius): 1 is
+  // the true gaussian, lower makes crisper cores, higher a softer cloud.
+  panel.appendChild(slider('Falloff', 0.5, 2, 0.05, 1, (v) => (uniforms.uFalloff.value = v)));
   const background = document.createElement('label');
   background.className = 'ov3d-slider';
   background.append('Background');
   const select = document.createElement('select');
-  for (const [label] of [
+  const BG = [
     ['Midnight', 0x0d1117],
     ['Slate', 0x21262d],
     ['White', 0xf6f8fa],
-  ])
-    select.add(new Option(label, label));
-  select.onchange = () => {
-    const [, color] = [
-      ['Midnight', 0x0d1117],
-      ['Slate', 0x21262d],
-      ['White', 0xf6f8fa],
-    ].find(([label]) => label === select.value);
-    renderer.setClearColor(color);
-  };
+  ];
+  for (const [label] of BG) select.add(new Option(label, label));
+  select.onchange = () => renderer.setClearColor(BG.find(([label]) => label === select.value)[1]);
   background.appendChild(select);
   panel.appendChild(background);
   mount.appendChild(panel);
