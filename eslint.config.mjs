@@ -33,8 +33,14 @@ export default [
     languageOptions: { sourceType: 'module' },
   },
   {
-    // Tests and config: ESM on Node + jsdom, plus the browser render harness.
-    files: ['tests/**/*.js', 'test/**/*.{js,mjs}', '*.config.js', '*.config.mjs'],
+    // Tests, build scripts, config: ESM on Node + jsdom, plus the browser render harness.
+    files: [
+      'tests/**/*.js',
+      'test/**/*.{js,mjs}',
+      'scripts/**/*.mjs',
+      '*.config.js',
+      '*.config.mjs',
+    ],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: 'module',
