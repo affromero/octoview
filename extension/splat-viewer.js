@@ -26,7 +26,8 @@ const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.01, 2
 camera.position.set(0, 0, 3);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-scene.add(new SparkRenderer({ renderer }));
+const spark = new SparkRenderer({ renderer });
+scene.add(spark);
 
 let splatMesh = null;
 
@@ -45,11 +46,65 @@ function frame() {
   controls.update();
 }
 
-// A Coords dropdown to reinterpret the source axes, same idea as the 3D renderer.
+// Compact display controls for inspecting the same splat under different rendering
+// conditions. Spark reads these values each frame, so each change is immediate.
 function buildPanel() {
   const panel = document.createElement('div');
   panel.className = 'panel';
+  const title = document.createElement('div');
+  title.className = 'panel-title';
+  title.textContent = 'Display';
+  panel.appendChild(title);
+
+  const settings = [
+    {
+      label: 'Opacity',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      value: 1,
+      format: (value) => Math.round(value * 100) + '%',
+      apply: (value) => (splatMesh.opacity = value),
+    },
+    {
+      label: 'Size',
+      min: 0.25,
+      max: 2.5,
+      step: 0.05,
+      value: 1,
+      format: (value) => value.toFixed(2) + '×',
+      apply: (value) => splatMesh.scale.setScalar(value),
+    },
+    {
+      label: 'Radius',
+      min: 2,
+      max: 3,
+      step: 0.05,
+      value: Math.sqrt(8),
+      format: (value) => value.toFixed(2),
+      apply: (value) => (spark.maxStdDev = value),
+    },
+    {
+      label: 'Falloff',
+      min: 0,
+      max: 1,
+      step: 0.05,
+      value: 1,
+      format: (value) => Math.round(value * 100) + '%',
+      apply: (value) => (spark.falloff = value),
+    },
+  ];
+  const resetters = settings.map((setting) => addSlider(panel, setting));
+
+  const background = addSelect(panel, 'Background', [
+    ['Midnight', 0x0d1117],
+    ['Slate', 0x21262d],
+    ['White', 0xf6f8fa],
+  ]);
+  background.select.onchange = () => renderer.setClearColor(background.value());
+
   const label = document.createElement('label');
+  label.className = 'panel-select';
   label.textContent = 'Coords';
   const select = document.createElement('select');
   for (const name of Object.keys(CONVENTIONS)) {
@@ -64,7 +119,58 @@ function buildPanel() {
   };
   label.appendChild(select);
   panel.appendChild(label);
+
+  const reset = document.createElement('button');
+  reset.type = 'button';
+  reset.textContent = 'Reset display';
+  reset.onclick = () => {
+    resetters.forEach((resetter) => resetter());
+    background.reset();
+  };
+  panel.appendChild(reset);
   document.body.appendChild(panel);
+}
+
+function addSlider(panel, { label, min, max, step, value, format, apply }) {
+  const field = document.createElement('label');
+  field.className = 'panel-slider';
+  const heading = document.createElement('span');
+  heading.textContent = label;
+  const output = document.createElement('output');
+  heading.appendChild(output);
+  const input = document.createElement('input');
+  input.type = 'range';
+  input.min = min;
+  input.max = max;
+  input.step = step;
+  const update = (next) => {
+    input.value = next;
+    output.textContent = format(next);
+    apply(next);
+  };
+  input.oninput = () => update(parseFloat(input.value));
+  field.append(heading, input);
+  panel.appendChild(field);
+  update(value);
+  return () => update(value);
+}
+
+function addSelect(panel, label, entries) {
+  const field = document.createElement('label');
+  field.className = 'panel-select';
+  field.append(label);
+  const select = document.createElement('select');
+  for (const [name] of entries) select.add(new Option(name, name));
+  field.appendChild(select);
+  panel.appendChild(field);
+  return {
+    select,
+    value: () => entries.find(([name]) => name === select.value)[1],
+    reset: () => {
+      select.selectedIndex = 0;
+      renderer.setClearColor(entries[0][1]);
+    },
+  };
 }
 
 addEventListener('message', async (e) => {
