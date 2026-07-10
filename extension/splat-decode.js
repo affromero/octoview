@@ -492,10 +492,17 @@ export async function parseSog(buf, decodeImage) {
   const meta = JSON.parse(new TextDecoder().decode(mf));
   if (!('version' in meta)) throw new Error('.sog v1 (pre-codebook) not supported');
   if (meta.version !== 2) throw new Error('.sog version ' + meta.version + ' not supported');
+  const total = meta.count;
+  if (!Number.isInteger(total) || total < 0 || total > 100_000_000)
+    throw new Error('.sog declares an implausible splat count');
+  // Each data texture must hold one RGBA texel per splat; a file whose count
+  // exceeds its images would index past the pixel arrays and read NaN garbage.
   const img = async (name) => {
     const entry = files.get(name);
     if (!entry) throw new Error('.sog is missing ' + name);
-    return (await decodeImage(entry)).data;
+    const { data } = await decodeImage(entry);
+    if (data.length < total * 4) throw new Error('.sog image ' + name + ' is smaller than count');
+    return data;
   };
   const [lo, hi, scales, sh0] = await Promise.all([
     img(meta.means.files[0]),
@@ -503,7 +510,6 @@ export async function parseSog(buf, decodeImage) {
     img(meta.scales.files[0]),
     img(meta.sh0.files[0]),
   ]);
-  const total = meta.count;
   const { mins, maxs } = meta.means;
   const scaleLut = meta.scales.codebook.map((x) => Math.exp(x));
   const colLut = meta.sh0.codebook.map((x) => clamp01(C0 * x + 0.5));

@@ -1,8 +1,9 @@
 // Adversarial-input tests for the DoS hardening and URL sanitizer from the
 // security audit: crafted files must THROW quickly, never hang or OOM the tab.
 import { describe, it, expect } from 'vitest';
+import { zipSync } from 'fflate';
 import { parseGguf } from '../extension/render-model.js';
-import { parseSpz } from '../extension/splat-decode.js';
+import { parseSpz, parseSog } from '../extension/splat-decode.js';
 
 const u8 = (arr) => new Uint8Array(arr).buffer;
 
@@ -45,6 +46,30 @@ describe('parser DoS hardening', () => {
     const t0 = Date.now();
     expect(() => parseOnnx(bomb.buffer)).toThrow();
     expect(Date.now() - t0).toBeLessThan(1000);
+  });
+
+  it('SOG: a count larger than the data images is rejected, not read OOB', async () => {
+    const meta = {
+      version: 2,
+      count: 1000, // lies: the images below hold only 1 texel
+      means: { mins: [0, 0, 0], maxs: [1, 1, 1], files: ['means_l.webp', 'means_u.webp'] },
+      scales: { codebook: [0], files: ['scales.webp'] },
+      sh0: { codebook: [0], files: ['sh0.webp'] },
+    };
+    const one = new Uint8Array(4); // one RGBA texel
+    const zip = zipSync({
+      'meta.json': new TextEncoder().encode(JSON.stringify(meta)),
+      'means_l.webp': one,
+      'means_u.webp': one,
+      'scales.webp': one,
+      'sh0.webp': one,
+    });
+    const decodeImage = async (bytes) => ({
+      data: new Uint8ClampedArray(bytes),
+      width: 1,
+      height: 1,
+    });
+    await expect(parseSog(zip.buffer, decodeImage)).rejects.toThrow(/smaller than count/);
   });
 });
 
