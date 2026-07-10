@@ -30,6 +30,8 @@
     '.spz',
     '.ksplat',
     '.sog',
+    '.lcc',
+    '.rad',
   ];
 
   const extname = (name) => {
@@ -54,6 +56,33 @@
     );
     const match = anchors.find((a) => new URL(a.href).pathname === want);
     return match ? match.href : 'https://github.com' + want;
+  };
+
+  // Git LFS raw URLs contain a small pointer instead of the file bytes. GitHub
+  // exposes the actual object through its media host on the blob page; retain a
+  // signed URL from that page when available, otherwise construct GitHub's
+  // public media URL. Deliberately do not follow arbitrary LFS-server URLs.
+  const lfsDownloadUrl = (doc, rawUrl) => {
+    const raw = new URL(rawUrl);
+    if (raw.hostname !== 'github.com') return null;
+    const match = raw.pathname.match(/^\/([^/]+\/[^/]+)\/raw\/(.+)$/);
+    if (!match) return null;
+    const fallback = new URL(
+      'https://media.githubusercontent.com/media/' + match[1] + '/' + match[2]
+    );
+    const links = [...doc.querySelectorAll('a[href]')];
+    const pageLink = links.find((a) => {
+      const url = new URL(a.href, 'https://github.com');
+      return url.hostname === 'media.githubusercontent.com' && url.pathname === fallback.pathname;
+    });
+    return pageLink ? pageLink.href : fallback.href;
+  };
+
+  const lfsPointer = (buf) => {
+    const match = decode(buf).match(
+      /^version https:\/\/git-lfs\.github\.com\/spec\/v1\r?\noid sha256:([a-f0-9]{64})\r?\nsize (\d+)\r?\n?$/i
+    );
+    return match ? { oid: match[1].toLowerCase(), size: match[2] } : null;
   };
 
   const decode = (buf) => new TextDecoder().decode(buf);
@@ -180,6 +209,8 @@
     isSupported,
     shouldShow,
     pickRawUrl,
+    lfsDownloadUrl,
+    lfsPointer,
     decode,
     renderNotebook,
     renderOutput,

@@ -17,7 +17,7 @@ const ARRAY_EXTS = ['.npy', '.npz'];
 const TABLE_EXTS = ['.parquet', '.arrow', '.feather', '.ipc'];
 const MODEL_EXTS = ['.safetensors', '.gguf'];
 const IMAGE_EXTS = ['.exr', '.hdr', '.tif', '.tiff'];
-const SPLAT_EXTS = ['.splat', '.splattie', '.spz', '.ksplat', '.sog'];
+const SPLAT_EXTS = ['.splat', '.splattie', '.spz', '.ksplat', '.sog', '.lcc', '.rad'];
 const MAX_PREVIEW_BYTES = 64 * 1024 * 1024;
 const MAX_MODEL_BYTES = 32 * 1024 * 1024;
 
@@ -84,16 +84,9 @@ async function onPreview(btn) {
     // Model files keep their structure at the front, so range-fetch the first 32MB
     // instead of pulling a multi-GB weights file down whole.
     const headers = MODEL_EXTS.includes(extOf()) ? { Range: 'bytes=0-33554431' } : undefined;
-    const res = await fetch(O.pickRawUrl(document, location.href), {
-      credentials: 'same-origin',
-      headers,
-      signal: controller.signal,
-    });
-    if (!res.ok) throw new Error('GitHub returned HTTP ' + res.status);
-    openPane(
-      btn,
-      await readPreviewBody(res, MODEL_EXTS.includes(extOf()) ? MAX_MODEL_BYTES : MAX_PREVIEW_BYTES)
-    );
+    const maxBytes = MODEL_EXTS.includes(extOf()) ? MAX_MODEL_BYTES : MAX_PREVIEW_BYTES;
+    const rawUrl = O.pickRawUrl(document, location.href);
+    openPane(btn, await fetchPreviewBytes(rawUrl, maxBytes, headers, controller.signal));
   } catch (e) {
     if (e.name === 'AbortError') return;
     console.error('[octoview]', e);
@@ -105,6 +98,36 @@ async function onPreview(btn) {
     btn.disabled = false;
   }
   btn.textContent = label;
+}
+
+// A GitHub raw URL serves a small pointer for LFS-tracked files. Follow only
+// GitHub's media URL (never a repository-configured external LFS remote), with
+// the same byte cap and cancellation semantics as normal source downloads.
+async function fetchPreviewBytes(rawUrl, maxBytes, headers, signal) {
+  let res = await fetch(rawUrl, { credentials: 'same-origin', headers, signal });
+  if (!res.ok) throw new Error('GitHub returned HTTP ' + res.status);
+  let buf = await readPreviewBody(res, maxBytes);
+  const pointer = O.lfsPointer(buf);
+  if (!pointer) return buf;
+  if (Number(pointer.size) > maxBytes)
+    throw new Error(
+      `file is ${formatBytes(Number(pointer.size))}; previews are limited to ${formatBytes(maxBytes)}`
+    );
+
+  const lfsUrl = O.lfsDownloadUrl(document, rawUrl);
+  if (!lfsUrl) throw new Error('GitHub did not provide a download URL for this Git LFS file');
+  res = await fetch(lfsUrl, { credentials: 'omit', headers, signal });
+  if (!res.ok) throw new Error('GitHub LFS download returned HTTP ' + res.status);
+  buf = await readPreviewBody(res, maxBytes);
+  if (O.lfsPointer(buf)) throw new Error('GitHub returned an unresolved Git LFS pointer');
+  await verifyLfsObject(buf, pointer.oid);
+  return buf;
+}
+
+async function verifyLfsObject(buf, expectedOid) {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', buf));
+  const actualOid = [...digest].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  if (actualOid !== expectedOid) throw new Error('GitHub LFS download did not match its pointer');
 }
 
 // Read incrementally so an arbitrary GitHub raw asset never becomes an
@@ -208,7 +231,9 @@ async function render(pane, buf, ext) {
   } else if (THREE_EXTS.includes(ext) || SPLAT_EXTS.includes(ext)) {
     pane.classList.add('ov-fill');
     pane.style.height = '78vh';
-    if (SPLAT_EXTS.includes(ext) || (ext === '.ply' && isPlySplatHead(buf))) {
+    if (ext === '.lcc') {
+      await renderLcc(buf, pane);
+    } else if (SPLAT_EXTS.includes(ext) || (ext === '.ply' && isPlySplatHead(buf))) {
       pane.appendChild(await splatFrame(buf, ext));
     } else {
       const { render3D } = await loadModule('render3d.js');
@@ -247,6 +272,23 @@ async function render(pane, buf, ext) {
   } else {
     msg(pane, 'No preview for ' + ext + ' yet.');
   }
+}
+
+async function renderLcc(metaBytes, mount) {
+  const rawUrl = O.pickRawUrl(document, location.href);
+  const fetchCompanion = async (name) => {
+    try {
+      return await fetchPreviewBytes(new URL(name, rawUrl).href, MAX_PREVIEW_BYTES);
+    } catch (e) {
+      throw new Error('LCC companion ' + name + ': ' + e.message, { cause: e });
+    }
+  };
+  const [indexBytes, dataBytes] = await Promise.all([
+    fetchCompanion('index.bin'),
+    fetchCompanion('data.bin'),
+  ]);
+  const { renderLcc: draw } = await loadModule('render-splat.js');
+  draw(metaBytes, indexBytes, dataBytes, mount);
 }
 
 // A Plotly MIME bundle renders LIVE: the vendored Plotly runs as our own code in
@@ -353,6 +395,10 @@ async function splatFrame(buf, ext) {
       console.warn(
         '[octoview] Spark viewer failed (' + sparkError + '), using main-thread renderer'
       );
+    if (ext === '.rad') {
+      msg(mount, 'RAD previews require the Spark viewer.');
+      return;
+    }
     loadModule('render-splat.js').then(({ renderSplat }) => renderSplat(buf, mount, ext));
   }
   function onMsg(e) {

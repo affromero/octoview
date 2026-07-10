@@ -16,6 +16,11 @@ const EXT = join(ROOT, 'build', 'chrome');
 // button placement) and a .Box-body (the content region the pane replaces).
 const blobPage = (file) => `<!doctype html><html><body>
   <a href="https://github.com/o/r/raw/main/samples/${file}">Raw</a>
+  ${
+    file === 'cube-lfs.obj'
+      ? '<a href="https://media.githubusercontent.com/media/o/r/main/samples/cube-lfs.obj?token=fixture">Download</a>'
+      : ''
+  }
   <div class="Box-body"><pre>raw code view of ${file}</pre></div>
 </body></html>`;
 
@@ -46,32 +51,49 @@ const CASES = [
         .catch(() => false),
   },
   {
+    file: 'cube-lfs.obj',
+    check: (page) =>
+      page
+        .locator('#octoview-pane canvas')
+        .first()
+        .isVisible()
+        .catch(() => false),
+  },
+  {
     file: 'capybara.splat',
     // Spark viewer canvas (in the extension iframe) or the main-thread
     // fallback canvas (in the pane) — either proves the splat path survives.
+    // The fallback also exposes the coordinate selector whenever it exposes Axes.
     check: async (page) => {
-      if (
-        await page
-          .locator('#octoview-pane canvas')
-          .first()
-          .isVisible()
-          .catch(() => false)
-      )
-        return true;
-      for (const f of page.frames()) {
-        if (f.url().includes('splat-viewer.html')) {
-          if (
-            await f
-              .locator('canvas')
-              .first()
-              .isVisible()
-              .catch(() => false)
-          )
-            return true;
-        }
+      const canvas = page.locator('#octoview-pane canvas').first();
+      if (await canvas.isVisible().catch(() => false)) {
+        const coords = page.locator('#octoview-pane .ov3d-panel select').first();
+        if (!(await coords.isVisible().catch(() => false))) return false;
+        await coords.selectOption({ label: 'Z-up (Blender, ROS, CAD)' });
+        return (await coords.inputValue()) === 'Z-up (Blender, ROS, CAD)';
+      }
+      for (const frame of page.frames()) {
+        if (!frame.url().includes('splat-viewer.html')) continue;
+        if (
+          await frame
+            .locator('canvas')
+            .first()
+            .isVisible()
+            .catch(() => false)
+        )
+          return true;
       }
       return false;
     },
+  },
+  {
+    file: 'lcc/meta.lcc',
+    check: (page) =>
+      page
+        .locator('#octoview-pane canvas')
+        .first()
+        .isVisible()
+        .catch(() => false),
   },
 ];
 
@@ -80,11 +102,35 @@ const ctx = await chromium.launchPersistentContext('', {
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
 });
 
+await ctx.route('https://media.githubusercontent.com/**', async (route) => {
+  const { pathname } = new URL(route.request().url());
+  if (
+    pathname === '/media/o/r/main/samples/cube-lfs.obj' &&
+    route.request().url().endsWith('?token=fixture')
+  ) {
+    return route.fulfill({
+      body: await readFile(join(ROOT, 'samples', 'cube.obj')),
+      contentType: 'application/octet-stream',
+    });
+  }
+  return route.fulfill({ status: 404 });
+});
+
 await ctx.route('https://github.com/**', async (route) => {
   const { pathname } = new URL(route.request().url());
   if (pathname.includes('/raw/')) {
+    const samplePath = pathname.split('/samples/')[1];
+    if (pathname.endsWith('/cube-lfs.obj')) {
+      return route.fulfill({
+        body:
+          'version https://git-lfs.github.com/spec/v1\n' +
+          'oid sha256:56d4804a51029a9091c0f260bb1ef8ecc1ce4b41ad6ba2a4acc1b3e0d4200afe\n' +
+          'size 0\n',
+        contentType: 'text/plain',
+      });
+    }
     const body = await readFile(
-      join(ROOT, pathname.split('/samples/')[1] ? 'samples' : '.', pathname.split('/').pop())
+      join(ROOT, samplePath ? 'samples' : '.', samplePath || pathname.split('/').pop())
     );
     return route.fulfill({ body, contentType: 'application/octet-stream' });
   }
