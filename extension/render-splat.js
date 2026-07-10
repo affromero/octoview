@@ -310,7 +310,12 @@ function buildPanel(mount, uniforms, count, renderer, onGizmo, onConvention) {
   coords.appendChild(coordSelect);
   panel.appendChild(coords);
   panel.appendChild(slider('Size', 0.1, 4, 0.05, 1, (v) => (uniforms.uScale.value = v)));
-  panel.appendChild(slider('Opacity', 0.1, 1, 0.02, 1, (v) => (uniforms.uOpacity.value = v)));
+  // Min 0.02 (not 0.1): with 200k+ heavily overlapping gaussians, 0.1 still
+  // composites to a solid surface. Only near 0.02-0.03 does the opacity fade
+  // enough to reveal the underlying means (the splat centers) as a translucent
+  // cloud, which is the point of an opacity control here. Fine 0.01 step so that
+  // low, useful range is adjustable.
+  panel.appendChild(slider('Opacity', 0.02, 1, 0.01, 1, (v) => (uniforms.uOpacity.value = v)));
   panel.appendChild(slider('Falloff', 0, 1, 0.05, 1, (v) => (uniforms.uFalloff.value = v)));
   const background = document.createElement('label');
   background.className = 'ov3d-slider';
