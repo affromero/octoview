@@ -30,6 +30,8 @@
     '.spz',
     '.ksplat',
     '.sog',
+    '.lcc',
+    '.rad',
   ];
 
   const extname = (name) => {

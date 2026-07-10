@@ -14,6 +14,7 @@ import {
   parseSog,
   isPlySplat,
 } from './splat-decode.js';
+import { parseLcc } from './lcc-decode.js';
 
 export { isPlySplat };
 
@@ -66,6 +67,18 @@ export async function renderSplat(buf, mount, ext) {
               : ext === '.sog'
                 ? await parseSog(buf, decodeImage)
                 : parsePlySplat(buf);
+    if (!splat.count) throw new Error('no splats found');
+    view(splat, mount);
+  } catch (e) {
+    fail(mount, e);
+  }
+}
+
+export function renderLcc(metaBytes, indexBytes, dataBytes, mount) {
+  ensureStyle();
+  mount.style.position = 'relative';
+  try {
+    const splat = parseLcc(metaBytes, indexBytes, dataBytes);
     if (!splat.count) throw new Error('no splats found');
     view(splat, mount);
   } catch (e) {

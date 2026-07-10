@@ -17,7 +17,7 @@ const ARRAY_EXTS = ['.npy', '.npz'];
 const TABLE_EXTS = ['.parquet', '.arrow', '.feather', '.ipc'];
 const MODEL_EXTS = ['.safetensors', '.gguf'];
 const IMAGE_EXTS = ['.exr', '.hdr', '.tif', '.tiff'];
-const SPLAT_EXTS = ['.splat', '.splattie', '.spz', '.ksplat', '.sog'];
+const SPLAT_EXTS = ['.splat', '.splattie', '.spz', '.ksplat', '.sog', '.lcc', '.rad'];
 const MAX_PREVIEW_BYTES = 64 * 1024 * 1024;
 const MAX_MODEL_BYTES = 32 * 1024 * 1024;
 
@@ -208,7 +208,9 @@ async function render(pane, buf, ext) {
   } else if (THREE_EXTS.includes(ext) || SPLAT_EXTS.includes(ext)) {
     pane.classList.add('ov-fill');
     pane.style.height = '78vh';
-    if (SPLAT_EXTS.includes(ext) || (ext === '.ply' && isPlySplatHead(buf))) {
+    if (ext === '.lcc') {
+      await renderLcc(buf, pane);
+    } else if (SPLAT_EXTS.includes(ext) || (ext === '.ply' && isPlySplatHead(buf))) {
       pane.appendChild(await splatFrame(buf, ext));
     } else {
       const { render3D } = await loadModule('render3d.js');
@@ -247,6 +249,22 @@ async function render(pane, buf, ext) {
   } else {
     msg(pane, 'No preview for ' + ext + ' yet.');
   }
+}
+
+async function renderLcc(metaBytes, mount) {
+  const rawUrl = O.pickRawUrl(document, location.href);
+  const fetchCompanion = async (name) => {
+    const response = await fetch(new URL(name, rawUrl), { credentials: 'same-origin' });
+    if (!response.ok)
+      throw new Error('LCC companion ' + name + ' returned HTTP ' + response.status);
+    return readPreviewBody(response, MAX_PREVIEW_BYTES);
+  };
+  const [indexBytes, dataBytes] = await Promise.all([
+    fetchCompanion('index.bin'),
+    fetchCompanion('data.bin'),
+  ]);
+  const { renderLcc: draw } = await loadModule('render-splat.js');
+  draw(metaBytes, indexBytes, dataBytes, mount);
 }
 
 // A Plotly MIME bundle renders LIVE: the vendored Plotly runs as our own code in
@@ -353,6 +371,10 @@ async function splatFrame(buf, ext) {
       console.warn(
         '[octoview] Spark viewer failed (' + sparkError + '), using main-thread renderer'
       );
+    if (ext === '.rad') {
+      msg(mount, 'RAD previews require the Spark viewer.');
+      return;
+    }
     loadModule('render-splat.js').then(({ renderSplat }) => renderSplat(buf, mount, ext));
   }
   function onMsg(e) {
