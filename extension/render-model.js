@@ -130,6 +130,9 @@ class Reader {
     }
   }
   // Advance past a value without allocating it (used to skip long array tails).
+  // Bounds-check after every advance: a fixed-type skip does no DataView read,
+  // so without this an array with an attacker-huge count would spin the main
+  // thread forever instead of throwing at end-of-buffer.
   skip(type) {
     const FIXED = { 0: 1, 1: 1, 2: 2, 3: 2, 4: 4, 5: 4, 6: 4, 7: 1, 10: 8, 11: 8, 12: 8 };
     if (type === 8) {
@@ -141,6 +144,7 @@ class Reader {
     } else {
       this.p += FIXED[type];
     }
+    if (this.p > this.u8.length) throw new Error('GGUF metadata runs past end of file');
   }
 }
 

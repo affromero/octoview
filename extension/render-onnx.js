@@ -10,12 +10,17 @@ function reader(bytes) {
   const varint = () => {
     let v = 0n;
     let shift = 0n;
-    for (;;) {
+    // A 64-bit varint is at most 10 bytes. Cap the loop so a crafted run of
+    // continuation bytes (0x80+) can't grow `shift` unbounded and blow up
+    // BigInt allocation, and stop at end-of-buffer instead of reading undefined.
+    for (let i = 0; i < 10; i++) {
+      if (p >= bytes.length) throw new Error('ONNX varint runs past end of file');
       const b = bytes[p++];
       v |= BigInt(b & 0x7f) << shift;
       if (!(b & 0x80)) return v;
       shift += 7n;
     }
+    throw new Error('ONNX varint too long');
   };
   return {
     get done() {
@@ -128,6 +133,10 @@ export function parseOnnx(buf) {
     else g.skip(w);
   }
   if (!graph.nodes.length) throw new Error('ONNX graph has no nodes');
+  // Protobuf has no node-count field, so a crafted file can encode ~1 node/byte;
+  // the O(n) layout and per-node SVG stay bounded by refusing pathological graphs.
+  if (graph.nodes.length > 20000)
+    throw new Error('ONNX graph too large to preview (' + graph.nodes.length + ' nodes)');
   return graph;
 }
 
@@ -171,7 +180,7 @@ export function layoutGraph(graph) {
   const GY = 46;
   const nodes = graph.nodes.map((n, i) => {
     const layer = layers[rank[i]];
-    const k = layer.indexOf(i);
+    const k = posInLayer.get(i); // precomputed above; avoids an O(n^2) indexOf
     const layerWidth = layer.length * (W + GX) - GX;
     const weights = n.inputs.filter((x) => weightNames.has(x));
     return {
@@ -224,11 +233,19 @@ export function renderOnnx(buf, mount) {
       `${graph.initializers.length} tensors · ${params.toLocaleString()} params`;
     mount.appendChild(meta);
 
-    const xs = nodes.map((n) => n.x);
-    const ys = nodes.map((n) => n.y);
-    const minX = Math.min(...xs) - 40;
-    const maxX = Math.max(...xs.map((x, i) => x + nodes[i].w)) + 40;
-    const maxY = Math.max(...ys) + 46 + 30;
+    // reduce, not Math.min(...spread): a large node array would overflow the
+    // call stack when spread into the arguments list.
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const n of nodes) {
+      if (n.x < minX) minX = n.x;
+      if (n.x + n.w > maxX) maxX = n.x + n.w;
+      if (n.y > maxY) maxY = n.y;
+    }
+    minX -= 40;
+    maxX += 40;
+    maxY += 46 + 30;
     const svg = document.createElementNS(XMLNS, 'svg');
     svg.setAttribute('viewBox', `${minX} -20 ${maxX - minX} ${maxY + 20}`);
     svg.setAttribute('class', 'ov-onnx-svg');

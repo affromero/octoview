@@ -102,11 +102,17 @@
     for (const el of root.querySelectorAll('*')) {
       for (const attr of [...el.attributes]) {
         const n = attr.name.toLowerCase();
-        // Strip whitespace (tab/newline/CR) before the scheme check: browsers
-        // ignore it inside a URL, so `jav&#x09;ascript:` still executes otherwise.
-        const stripped = attr.value.replace(/\s+/g, '');
+        // Normalize before the scheme check: browsers strip ALL C0 control
+        // chars and spaces (\x00-\x20) from the front of a URL before parsing
+        // the scheme, so `\x01javascript:` or `jav\tascript:` still executes.
+        // Stripping only \s (as before) missed the control-char variants.
+        // eslint-disable-next-line no-control-regex -- stripping C0 control chars is the intent
+        const scheme = attr.value.replace(/[\u0000-\u0020]+/g, '').toLowerCase();
         if (n.startsWith('on')) el.removeAttribute(attr.name);
-        else if (/^(href|src|xlink:href)$/.test(n) && /^javascript:/i.test(stripped))
+        else if (
+          /^(href|src|xlink:href|srcset|formaction|action)$/.test(n) &&
+          /^(javascript|data|vbscript):/.test(scheme)
+        )
           el.removeAttribute(attr.name);
       }
     }

@@ -4,10 +4,35 @@
 // .ply, the PlayCanvas/SuperSplat COMPRESSED .ply (chunk + packed_* uints, what
 // splat-transform emits), and the .splattie bundle.
 import { unzip, toBuffer } from './unzip.js';
-import { gunzipSync, zstdDecompress } from './vendor/fflate.esm.js';
+import { zstdDecompress, Gunzip } from './vendor/fflate.esm.js';
 
 const C0 = 0.28209479177387814; // SH band-0 factor, f_dc -> base color
 const MAX_SPLATS = 800000; // ponytail: subsample beyond this to keep the sort snappy
+// Untrusted .spz files decompress on the main thread; cap the inflated size so a
+// gzip/zstd bomb (a tiny file expanding to gigabytes) cannot OOM the tab. 256MiB
+// is well past any real capture yet survivable.
+const SPZ_MAX_BYTES = 256 * 1024 * 1024;
+
+// gunzip with a running output cap: a bomb aborts mid-stream instead of after a
+// multi-GB allocation. fflate's Gunzip calls ondata synchronously during push,
+// so a throw here propagates out.
+function gunzipCapped(raw, cap) {
+  const chunks = [];
+  let size = 0;
+  const g = new Gunzip((chunk) => {
+    size += chunk.length;
+    if (size > cap) throw new Error('.spz gzip stream exceeds the ' + (cap >> 20) + 'MiB limit');
+    chunks.push(chunk.slice()); // ondata may reuse its buffer; copy
+  });
+  g.push(raw, true);
+  const out = new Uint8Array(size);
+  let o = 0;
+  for (const c of chunks) {
+    out.set(c, o);
+    o += c.length;
+  }
+  return out;
+}
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const TSIZE = {
   char: 1,
@@ -239,7 +264,7 @@ export function parseSpz(buf) {
   const attrs =
     buf.byteLength >= 8 && plainMagic.getUint32(0, true) === 0x5053474e
       ? spzV4Streams(raw)
-      : spzV13Streams(gunzipSync(raw));
+      : spzV13Streams(gunzipCapped(raw, SPZ_MAX_BYTES));
   const { total, fractionalBits, centers, centerBytes, alphas, colors, scales } = attrs;
 
   const step = Math.max(1, Math.ceil(total / MAX_SPLATS));
@@ -307,6 +332,9 @@ function spzV4Streams(raw) {
   const version = dv.getUint32(4, true);
   if (version !== 4) throw new Error('.spz version ' + version + ' not supported (v1-4 only)');
   const total = dv.getUint32(8, true);
+  // total is an unvalidated header field; the positions stream alone is total*9
+  // bytes and gets allocated up front, so cap it before trusting it.
+  if (total * 9 > SPZ_MAX_BYTES) throw new Error('.spz v4 declares too many points');
   const shDegree = raw[12];
   const fractionalBits = raw[13];
   const numStreams = raw[15];
@@ -331,9 +359,11 @@ function spzV4Streams(raw) {
       continue;
     }
     if (seen++ >= numStreams) throw new Error('.spz v4 stream table truncated');
+    if (entry + 16 > raw.length) throw new Error('.spz v4 TOC out of bounds');
     const compressed = Number(dv.getBigUint64(entry, true));
     const uncompressed = Number(dv.getBigUint64(entry + 8, true));
     if (uncompressed !== size) throw new Error('.spz v4 stream size mismatch');
+    if (data + compressed > raw.length) throw new Error('.spz v4 stream out of bounds');
     // rotations and SH are never used by the isotropic preview — skip the
     // decompression entirely, not just the parse
     out.push(
