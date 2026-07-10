@@ -38,4 +38,15 @@ JS
 npx esbuild build/hyparquet.entry.mjs --bundle --format=esm --minify \
   --outfile=extension/vendor/hyparquet.esm.js
 
-echo "vendored: marked.min.js, three3d.esm.js, hyparquet.esm.js"
+# plotly (cartesian traces: scatter/bar/histogram/heatmap/box/contour/pie) as an
+# ES module, lazy-imported by content.js only when a notebook output carries a
+# Plotly MIME bundle.
+# ponytail: cartesian bundle; swap to plotly.js-dist-min if 3D/geo traces are needed
+cat > build/plotly.entry.mjs <<'JS'
+import Plotly from 'plotly.js-cartesian-dist-min';
+export default Plotly;
+JS
+npx esbuild build/plotly.entry.mjs --bundle --format=esm --minify \
+  --outfile=extension/vendor/plotly.esm.js
+
+echo "vendored: marked.min.js, three3d.esm.js, hyparquet.esm.js, plotly.esm.js"
