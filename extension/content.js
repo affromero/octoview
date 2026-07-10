@@ -225,13 +225,21 @@ async function splatBytes(buf, ext) {
 // inline as an iframe, the one context whose CSP allows Spark's worker + WASM).
 // If the extension frame is blocked, or Spark cannot start (no beacon / error /
 // timeout), fall back to the main-thread renderer, which needs no worker or WASM.
+// .spz/.ksplat have no main-thread decoder, so Spark is the only path; if it
+// fails, show the reason instead of falling back to a renderer that cannot read them.
+const SPARK_ONLY = ['.spz', '.ksplat'];
+
 async function splatFrame(buf, ext) {
   const { bytes, fileName } = await splatBytes(buf, ext);
   const viewerUrl = browser.runtime.getURL('splat-viewer.html');
   const f = document.createElement('iframe');
   f.className = 'ov-frame';
   let settled = false;
-  const timer = setTimeout(() => fallback(), 12000);
+  let sparkError = null;
+  const timer = setTimeout(() => {
+    console.warn('[octoview] Spark viewer frame did not respond in 12s (blocked or slow)');
+    fallback();
+  }, 12000);
   function fallback() {
     if (settled) return;
     settled = true;
@@ -241,7 +249,16 @@ async function splatFrame(buf, ext) {
     mount.className = 'ov-fill';
     mount.style.height = '78vh';
     f.replaceWith(mount);
-    loadModule('render-splat.js').then(({ renderSplat }) => renderSplat(buf, mount, ext));
+    if (SPARK_ONLY.includes(ext)) {
+      msg(
+        mount,
+        'Spark could not render this ' +
+          ext +
+          (sparkError ? ': ' + sparkError : ' (extension frame did not respond)')
+      );
+    } else {
+      loadModule('render-splat.js').then(({ renderSplat }) => renderSplat(buf, mount, ext));
+    }
   }
   function onMsg(e) {
     if (e.source !== f.contentWindow || !e.data) return;
@@ -252,7 +269,8 @@ async function splatFrame(buf, ext) {
       clearTimeout(timer);
       removeEventListener('message', onMsg);
     } else if (e.data.type === 'ov-splat-error') {
-      console.warn('[octoview] Spark path failed, falling back to sprites:', e.data.error);
+      sparkError = e.data.error;
+      console.warn('[octoview] Spark path failed, falling back:', e.data.error);
       fallback();
     }
   }
