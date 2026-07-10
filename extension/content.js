@@ -18,6 +18,8 @@ const TABLE_EXTS = ['.parquet'];
 const MODEL_EXTS = ['.safetensors', '.gguf'];
 const IMAGE_EXTS = ['.exr', '.hdr', '.tif', '.tiff'];
 const SPLAT_EXTS = ['.splat', '.splattie', '.spz', '.ksplat'];
+const MAX_PREVIEW_BYTES = 64 * 1024 * 1024;
+const MAX_MODEL_BYTES = 32 * 1024 * 1024;
 
 // Cheap header sniff: a 3DGS .ply carries gaussian props; a plain .ply does not.
 // Lets us route .ply to the splat vs the mesh/point-cloud renderer without
@@ -58,7 +60,10 @@ function findContent() {
 }
 
 let hidden = null;
+let previewController = null;
 function closePane(btn) {
+  previewController?.abort();
+  previewController = null;
   document.getElementById(PANE_ID)?.remove();
   if (hidden) {
     hidden.style.display = '';
@@ -69,8 +74,12 @@ function closePane(btn) {
 
 async function onPreview(btn) {
   if (document.getElementById(PANE_ID)) return closePane(btn);
+  if (previewController) return;
   const label = btn.textContent;
   btn.textContent = 'Loading…';
+  btn.disabled = true;
+  const controller = new AbortController();
+  previewController = controller;
   try {
     // Model files keep their structure at the front, so range-fetch the first 32MB
     // instead of pulling a multi-GB weights file down whole.
@@ -78,16 +87,72 @@ async function onPreview(btn) {
     const res = await fetch(O.pickRawUrl(document, location.href), {
       credentials: 'same-origin',
       headers,
+      signal: controller.signal,
     });
     if (!res.ok) throw new Error('GitHub returned HTTP ' + res.status);
-    openPane(btn, await res.arrayBuffer());
+    openPane(
+      btn,
+      await readPreviewBody(res, MODEL_EXTS.includes(extOf()) ? MAX_MODEL_BYTES : MAX_PREVIEW_BYTES)
+    );
   } catch (e) {
+    if (e.name === 'AbortError') return;
     console.error('[octoview]', e);
     btn.textContent = 'failed';
     setTimeout(() => (btn.textContent = label), 2500);
     return;
+  } finally {
+    if (previewController === controller) previewController = null;
+    btn.disabled = false;
   }
   btn.textContent = label;
+}
+
+// Read incrementally so an arbitrary GitHub raw asset never becomes an
+// unbounded ArrayBuffer. The final buffer is deliberately capped before it is
+// handed to renderers, which may allocate decoded representations of it.
+async function readPreviewBody(res, maxBytes) {
+  const length = Number(res.headers.get('content-length'));
+  if (Number.isFinite(length) && length > maxBytes)
+    throw new Error(
+      `file is ${formatBytes(length)}; previews are limited to ${formatBytes(maxBytes)}`
+    );
+
+  const reader = res.body?.getReader();
+  if (!reader) {
+    const buf = await res.arrayBuffer();
+    if (buf.byteLength > maxBytes)
+      throw new Error(`file is larger than the ${formatBytes(maxBytes)} preview limit`);
+    return buf;
+  }
+
+  const chunks = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (size + value.byteLength > maxBytes) {
+        await reader.cancel();
+        throw new Error(`file is larger than the ${formatBytes(maxBytes)} preview limit`);
+      }
+      chunks.push(value);
+      size += value.byteLength;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes.buffer;
+}
+
+function formatBytes(bytes) {
+  return Math.round(bytes / (1024 * 1024)) + ' MiB';
 }
 
 function openPane(btn, buf) {

@@ -104,6 +104,23 @@ the rendered file; clicking it again swaps back.
 The dispatch, URL resolution, and notebook rendering live in
 [`extension/core.js`](extension/core.js), kept free of browser APIs so they run under Vitest.
 
+## Memory and large files
+
+octoview does not run a background process, poll GitHub, or retain a file cache. Its content script
+adds a small button on GitHub pages; the larger renderer bundles load only after you click
+**Preview**.
+
+Previews still need memory while a file is being decoded and rendered, especially for 3D assets and
+scientific images. To keep that bounded, octoview limits a normal source download to **64 MiB** and
+model metadata reads to **32 MiB**. ZIP-based previews (`.npz` and `.splattie`) also refuse archives
+whose uncompressed entries total more than **64 MiB**. A preview in progress can be started only
+once, and is cancelled if you close the preview or navigate away.
+
+Those limits apply to source bytes, not every renderer's decoded representation: an EXR/HDR image,
+for example, expands into float pixels and a canvas. Keep very high-resolution images and unusually
+complex 3D scenes out of the preview path when browser memory is constrained. Gaussian-splat
+previews additionally subsample to 800,000 splats and release their WebGL context when closed.
+
 ## Related work
 
 octoview is a browser extension, so the closest comparison is other GitHub extensions. Nearly all of them enhance navigation or polish the UI. **None render the file's contents**, let alone ML and data formats. octoview is the one that turns a blob page into a live preview of the file itself.

@@ -3,7 +3,7 @@
 // every Safari version and handles store, deflate, data descriptors and ZIP64.
 import { unzipSync } from './vendor/fflate.esm.js';
 
-const CAP = 1 << 30; // refuse if a single entry, or the total, inflates past 1GB
+const CAP = 64 * 1024 * 1024; // refuse if a single entry, or the total, inflates past 64 MiB
 
 // Returns a name -> Uint8Array map of the ZIP's entries.
 export function unzip(buf) {
