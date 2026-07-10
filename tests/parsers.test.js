@@ -13,9 +13,9 @@ import {
   parseSpz,
   parseKsplat,
   parseSog,
+  parseLcc,
 } from '../extension/splat-decode.js';
 import { unzip } from '../extension/unzip.js';
-import { parseLcc } from '../extension/lcc-decode.js';
 import { zipSync } from 'fflate';
 
 const fixture = (name) => {

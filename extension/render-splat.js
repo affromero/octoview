@@ -12,9 +12,9 @@ import {
   parseSpz,
   parseKsplat,
   parseSog,
+  parseLcc,
   isPlySplat,
 } from './splat-decode.js';
-import { parseLcc } from './lcc-decode.js';
 
 export { isPlySplat };
 
