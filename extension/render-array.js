@@ -1,7 +1,7 @@
 // octoview array renderer, lazy-imported inline for .npy/.npz. Pure JS: parses the
 // NumPy header and draws the data as a false-color heatmap (2D) or an image (H,W,3).
-// No workers, no deps -> WebKit safe. .npz is a ZIP of .npy entries; DEFLATE ones
-// are inflated with the native DecompressionStream (Safari 16.4+), also main-thread.
+// No workers, no deps -> WebKit safe. .npz is a ZIP of .npy entries (see unzip.js).
+import { unzip, toBuffer } from './unzip.js';
 
 // viridis control points, linear-interpolated -> readable heatmaps.
 const VIRIDIS = [
@@ -16,7 +16,7 @@ const VIRIDIS = [
   [180, 222, 44],
   [253, 231, 37],
 ];
-function colormap(t) {
+export function colormap(t) {
   const x = Math.max(0, Math.min(1, t)) * (VIRIDIS.length - 1);
   const i = Math.floor(x);
   const f = x - i;
@@ -38,68 +38,94 @@ const DTYPE = {
   u1: [Uint8Array, 1],
   b1: [Uint8Array, 1],
 };
+const TNAME = {
+  Float64Array: 'Float64',
+  Float32Array: 'Float32',
+  Int32Array: 'Int32',
+  Int16Array: 'Int16',
+  Int8Array: 'Int8',
+  Uint32Array: 'Uint32',
+  Uint16Array: 'Uint16',
+  Uint8Array: 'Uint8',
+};
+const MAX_DIM = 2000; // cap the rendered canvas; larger arrays are stride-downsampled
 
-// Parse one .npy buffer -> { shape, dtype, data:Float64Array (row-major) }.
-function parseNpy(buf) {
+// Parse one .npy buffer -> { dims, descr, data } (data is an array-like, row-major).
+export function parseNpy(buf) {
   const b = new Uint8Array(buf);
   if (b[0] !== 0x93 || String.fromCharCode(b[1], b[2], b[3], b[4], b[5]) !== 'NUMPY')
     throw new Error('not a .npy file');
-  const major = b[6];
-  let hlen, hstart;
   const dv = new DataView(buf);
-  if (major >= 2) {
-    hlen = dv.getUint32(8, true);
-    hstart = 12;
-  } else {
-    hlen = dv.getUint16(8, true);
-    hstart = 10;
-  }
+  const major = b[6];
+  const hlen = major >= 2 ? dv.getUint32(8, true) : dv.getUint16(8, true);
+  const hstart = major >= 2 ? 12 : 10;
   const header = new TextDecoder().decode(b.subarray(hstart, hstart + hlen));
   const descr = /'descr':\s*'([^']+)'/.exec(header)[1];
   const fortran = /'fortran_order':\s*True/.test(header);
-  const shapeStr = /'shape':\s*\(([^)]*)\)/.exec(header)[1];
-  const dims = shapeStr
+  const dims = /'shape':\s*\(([^)]*)\)/
+    .exec(header)[1]
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
     .map(Number);
 
   const endian = descr[0];
-  const key = descr.slice(1);
-  const spec = DTYPE[key];
+  const spec = DTYPE[descr.slice(1)];
   if (!spec) throw new Error('unsupported dtype ' + descr);
   const [Arr, size] = spec;
   const count = dims.reduce((a, d) => a * d, 1) || 0;
   const dataStart = hstart + hlen;
+  if (dataStart + count * size > buf.byteLength) throw new Error('.npy data is truncated');
 
-  // Decode to Float64 row-major, honoring endianness and fortran order.
-  const out = new Float64Array(count);
   const little = endian !== '>';
-  const read =
-    Arr === BigInt64Array || Arr === BigUint64Array
-      ? (o) => Number(dv[Arr === BigInt64Array ? 'getBigInt64' : 'getBigUint64'](o, little))
-      : (o) => dv['get' + typeName(Arr)](o, little);
-  for (let i = 0; i < count; i++) out[i] = read(dataStart + i * size);
-
-  return { dims, descr, data: fortran && dims.length === 2 ? toC(out, dims) : out, fortran };
+  const is64 = Arr === BigInt64Array || Arr === BigUint64Array;
+  let data;
+  if (little && !is64) {
+    // Fast path: view the bytes as the native typed array (slice guarantees
+    // alignment). Avoids a per-element DataView loop on large arrays.
+    data = new Arr(buf.slice(dataStart, dataStart + count * size));
+  } else {
+    data = new Float64Array(count);
+    const getBig = Arr === BigInt64Array ? 'getBigInt64' : 'getBigUint64';
+    for (let i = 0; i < count; i++) {
+      const o = dataStart + i * size;
+      data[i] = is64 ? Number(dv[getBig](o, little)) : dv['get' + TNAME[Arr.name]](o, little);
+    }
+  }
+  return { dims, descr, data: fortran && dims.length > 1 ? fortranToC(data, dims) : data };
 }
 
-function typeName(Arr) {
-  return {
-    Float64Array: 'Float64',
-    Float32Array: 'Float32',
-    Int32Array: 'Int32',
-    Int16Array: 'Int16',
-    Int8Array: 'Int8',
-    Uint32Array: 'Uint32',
-    Uint16Array: 'Uint16',
-    Uint8Array: 'Uint8',
-  }[Arr.name];
+// Reorder column-major (Fortran) data to row-major (C) for any dimensionality.
+function fortranToC(data, dims) {
+  const nd = dims.length;
+  const cStride = new Array(nd);
+  const fStride = new Array(nd);
+  cStride[nd - 1] = 1;
+  for (let i = nd - 2; i >= 0; i--) cStride[i] = cStride[i + 1] * dims[i + 1];
+  fStride[0] = 1;
+  for (let i = 1; i < nd; i++) fStride[i] = fStride[i - 1] * dims[i - 1];
+  const out = new data.constructor(data.length);
+  for (let c = 0; c < data.length; c++) {
+    let rem = c;
+    let f = 0;
+    for (let d = 0; d < nd; d++) {
+      const k = Math.floor(rem / cStride[d]);
+      rem -= k * cStride[d];
+      f += k * fStride[d];
+    }
+    out[c] = data[f];
+  }
+  return out;
 }
 
-function toC(data, [h, w]) {
-  const out = new Float64Array(data.length);
-  for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) out[r * w + c] = data[c * h + r];
+// .npz: a ZIP of `name.npy` entries.
+export function unzipNpz(buf) {
+  const files = unzip(buf);
+  const out = [];
+  for (const [name, bytes] of files) {
+    if (name.endsWith('.npy'))
+      out.push({ name: name.replace(/\.npy$/, ''), ...parseNpy(toBuffer(bytes)) });
+  }
   return out;
 }
 
@@ -122,8 +148,9 @@ function drawArray(a, mount, showName) {
   let lo = Infinity;
   let hi = -Infinity;
   for (let i = 0; i < data.length; i++) {
-    if (data[i] < lo) lo = data[i];
-    if (data[i] > hi) hi = data[i];
+    const v = data[i];
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
   }
   const meta = document.createElement('div');
   meta.className = 'ov-arr-meta';
@@ -132,9 +159,50 @@ function drawArray(a, mount, showName) {
     `shape (${dims.join(', ')})  ·  ${descr}  ·  min ${fmt(lo)}  max ${fmt(hi)}`;
   mount.appendChild(meta);
 
+  // 1D/2D/3D get an image + a raw-numbers view; 4D+ is not previewable yet.
+  if (dims.length > 3) {
+    const p = document.createElement('p');
+    p.className = 'ov-msg';
+    p.textContent = `${dims.length}-D array. Preview supports 1D, 2D and 3D (H×W×C).`;
+    mount.appendChild(p);
+    return;
+  }
+
+  const image = buildImage(dims, descr, data, lo, hi);
+  const numbers = buildNumbers(dims, data);
+  numbers.style.display = 'none';
+
+  const tabs = document.createElement('div');
+  tabs.className = 'ov-arr-tabs';
+  const bImg = tab('Image', true);
+  const bNum = tab('Numbers', false);
+  const show = (on, onBtn, off, offBtn) => {
+    on.style.display = '';
+    off.style.display = 'none';
+    onBtn.classList.add('on');
+    offBtn.classList.remove('on');
+  };
+  bImg.onclick = () => show(image, bImg, numbers, bNum);
+  bNum.onclick = () => show(numbers, bNum, image, bImg);
+  tabs.append(bImg, bNum);
+  mount.append(tabs, image, numbers);
+}
+
+function tab(label, on) {
+  const b = document.createElement('button');
+  b.className = 'ov-arr-tab' + (on ? ' on' : '');
+  b.textContent = label;
+  return b;
+}
+
+function buildImage(dims, descr, data, lo, hi) {
   const isRGB = dims.length === 3 && (dims[2] === 3 || dims[2] === 4);
-  const h = dims.length === 1 ? 1 : dims[0];
-  const w = dims.length === 1 ? dims[0] : dims[1];
+  const srcH = dims.length === 1 ? 1 : dims[0];
+  const srcW = dims.length === 1 ? dims[0] : dims[1];
+  const ds = Math.max(1, Math.ceil(Math.max(srcW, srcH) / MAX_DIM));
+  const w = Math.max(1, Math.ceil(srcW / ds));
+  const h = Math.max(1, Math.ceil(srcH / ds));
+
   const canvas = document.createElement('canvas');
   canvas.className = 'ov-arr-canvas';
   canvas.width = w;
@@ -142,31 +210,75 @@ function drawArray(a, mount, showName) {
   const ctx = canvas.getContext('2d');
   const img = ctx.createImageData(w, h);
   const span = hi - lo || 1;
+  const c = isRGB ? dims[2] : 1;
   const floatRGB = isRGB && (descr.includes('f') || hi <= 1.01);
 
-  for (let i = 0; i < w * h; i++) {
-    const o = i * 4;
-    if (isRGB) {
-      const c = dims[2];
-      const base = i * c;
-      const s = floatRGB ? 255 : 1;
-      img.data[o] = data[base] * s;
-      img.data[o + 1] = data[base + 1] * s;
-      img.data[o + 2] = data[base + 2] * s;
-      img.data[o + 3] = c === 4 ? data[base + 3] * s : 255;
-    } else {
-      const [r, g, bl] = colormap((data[i] - lo) / span);
-      img.data[o] = r;
-      img.data[o + 1] = g;
-      img.data[o + 2] = bl;
-      img.data[o + 3] = 255;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const src = y * ds * srcW + x * ds;
+      const o = (y * w + x) * 4;
+      if (isRGB) {
+        const base = src * c;
+        const s = floatRGB ? 255 : 1;
+        img.data[o] = data[base] * s;
+        img.data[o + 1] = data[base + 1] * s;
+        img.data[o + 2] = data[base + 2] * s;
+        img.data[o + 3] = c === 4 ? data[base + 3] * s : 255;
+      } else {
+        const [r, g, bl] = colormap((data[src] - lo) / span);
+        img.data[o] = r;
+        img.data[o + 1] = g;
+        img.data[o + 2] = bl;
+        img.data[o + 3] = 255;
+      }
     }
   }
   ctx.putImageData(img, 0, 0);
-  // Scale up small arrays crisply; scale down big ones to fit.
   canvas.style.width = Math.min(Math.max(w, 240), 900) + 'px';
   canvas.style.imageRendering = w < 200 ? 'pixelated' : 'auto';
-  mount.appendChild(canvas);
+  return canvas;
+}
+
+function buildNumbers(dims, data) {
+  const nd = dims.length;
+  const H = nd === 1 ? 1 : dims[0];
+  const W = nd === 1 ? dims[0] : dims[1];
+  const C = nd === 3 ? dims[2] : 1;
+  const CAP = 100;
+  const rows = Math.min(H, CAP);
+  const cols = Math.min(W, CAP);
+
+  const box = document.createElement('div');
+  if (H > rows || W > cols) {
+    const note = document.createElement('div');
+    note.className = 'ov-arr-meta';
+    note.textContent = `showing first ${rows} × ${cols} of ${H} × ${W}`;
+    box.appendChild(note);
+  }
+  const scroll = document.createElement('div');
+  scroll.className = 'ov-tbl-scroll';
+  const table = document.createElement('table');
+  table.className = 'ov-tbl';
+  const head = table.createTHead().insertRow();
+  head.insertCell();
+  for (let x = 0; x < cols; x++) head.insertCell().textContent = x;
+  const body = table.createTBody();
+  for (let y = 0; y < rows; y++) {
+    const tr = body.insertRow();
+    const ri = tr.insertCell();
+    ri.textContent = y;
+    ri.className = 'ov-tbl-idx';
+    for (let x = 0; x < cols; x++) {
+      const base = (y * W + x) * C;
+      tr.insertCell().textContent =
+        C === 1
+          ? fmt(data[base])
+          : Array.from({ length: C }, (_, k) => fmt(data[base + k])).join(', ');
+    }
+  }
+  scroll.appendChild(table);
+  box.appendChild(scroll);
+  return box;
 }
 
 function fmt(v) {
@@ -174,35 +286,4 @@ function fmt(v) {
   return Math.abs(v) >= 1000 || (Math.abs(v) < 0.001 && v !== 0)
     ? v.toExponential(2)
     : +v.toFixed(3);
-}
-
-// Iterate a ZIP's local file headers (numpy writes sizes in-header, seekable).
-async function unzipNpz(buf) {
-  const dv = new DataView(buf);
-  const b = new Uint8Array(buf);
-  const out = [];
-  let p = 0;
-  while (p + 4 <= b.length && dv.getUint32(p, true) === 0x04034b50) {
-    const method = dv.getUint16(p + 8, true);
-    const compSize = dv.getUint32(p + 18, true);
-    const nameLen = dv.getUint16(p + 26, true);
-    const extraLen = dv.getUint16(p + 28, true);
-    const nameStart = p + 30;
-    const name = new TextDecoder().decode(b.subarray(nameStart, nameStart + nameLen));
-    const dataStart = nameStart + nameLen + extraLen;
-    let bytes = b.subarray(dataStart, dataStart + compSize);
-    if (method === 8) bytes = new Uint8Array(await inflateRaw(bytes));
-    if (name.endsWith('.npy'))
-      out.push({
-        name: name.replace(/\.npy$/, ''),
-        ...parseNpy(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)),
-      });
-    p = dataStart + compSize;
-  }
-  return out;
-}
-
-function inflateRaw(bytes) {
-  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
-  return new Response(stream).arrayBuffer();
 }

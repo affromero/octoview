@@ -1,130 +1,30 @@
-// octoview Gaussian-splat renderer, lazy-imported inline for .splat and 3DGS .ply.
-// Spark and other splat viewers load in a Worker and fetch a blob URL, which
-// WebKit refuses, so this is a self-contained WebKit-safe renderer: it PARSES the
-// splat centers/colors/opacity/scale on the main thread and draws them as
-// depth-sorted gaussian point sprites via three.js. Isotropic (no covariance
-// ellipse), which is enough for a preview. Sorting reorders only the index buffer
-// (cheap) so alpha blending is back-to-front correct.
+// octoview Gaussian-splat renderer, lazy-imported inline for .splat, 3DGS .ply and
+// .splattie. Spark and other splat viewers load in a Worker and fetch a blob URL,
+// which WebKit refuses, so this parses the splat on the MAIN thread (see
+// splat-decode.js) and draws depth-sorted gaussian point sprites via three.js.
+// Isotropic (no covariance ellipse), which is enough for a preview. Sorting
+// reorders only the index buffer (cheap) so alpha blending is back-to-front correct.
 import { THREE, OrbitControls, ViewHelper } from './vendor/three3d.esm.js';
+import { parseSplatBin, parsePlySplat, parseSplattie, isPlySplat } from './splat-decode.js';
 
-const C0 = 0.28209479177387814; // SH band-0 factor, f_dc -> base color
-const MAX_SPLATS = 800000; // ponytail: subsample beyond this to keep sort snappy
+export { isPlySplat };
 
-export function renderSplat(buf, mount, ext) {
+export async function renderSplat(buf, mount, ext) {
   ensureStyle();
   mount.style.position = 'relative';
   try {
-    const splat = ext === '.splat' ? parseSplatBin(buf) : parsePlySplat(buf);
+    const splat =
+      ext === '.splat'
+        ? parseSplatBin(buf)
+        : ext === '.splattie'
+          ? await parseSplattie(buf)
+          : parsePlySplat(buf);
     if (!splat.count) throw new Error('no splats found');
     view(splat, mount);
   } catch (e) {
     fail(mount, e);
   }
 }
-
-// Detect a 3DGS PLY (as opposed to a mesh/point-cloud PLY) from its header text.
-export function isPlySplat(buf) {
-  const head = new TextDecoder().decode(new Uint8Array(buf, 0, Math.min(2048, buf.byteLength)));
-  return /f_dc_0/.test(head) && /scale_0/.test(head) && /rot_0/.test(head);
-}
-
-// antimatter15 .splat: 32 bytes/splat — pos(3 f32), scale(3 f32), rgba(4 u8), quat(4 u8).
-function parseSplatBin(buf) {
-  const count = Math.floor(buf.byteLength / 32);
-  const dv = new DataView(buf);
-  const pos = new Float32Array(count * 3);
-  const col = new Float32Array(count * 4);
-  const size = new Float32Array(count);
-  for (let i = 0; i < count; i++) {
-    const o = i * 32;
-    pos[i * 3] = dv.getFloat32(o, true);
-    pos[i * 3 + 1] = dv.getFloat32(o + 4, true);
-    pos[i * 3 + 2] = dv.getFloat32(o + 8, true);
-    size[i] =
-      (dv.getFloat32(o + 12, true) + dv.getFloat32(o + 16, true) + dv.getFloat32(o + 20, true)) / 3;
-    col[i * 4] = dv.getUint8(o + 24) / 255;
-    col[i * 4 + 1] = dv.getUint8(o + 25) / 255;
-    col[i * 4 + 2] = dv.getUint8(o + 26) / 255;
-    col[i * 4 + 3] = dv.getUint8(o + 27) / 255;
-  }
-  return subsample({ count, pos, col, size });
-}
-
-// 3DGS PLY (binary_little_endian): x y z … f_dc_0..2 … opacity scale_0..2 rot_0..3.
-function parsePlySplat(buf) {
-  const bytes = new Uint8Array(buf);
-  const headTxt = new TextDecoder().decode(bytes.subarray(0, 4096));
-  const end = headTxt.indexOf('end_header');
-  const dataStart = headTxt.indexOf('\n', end) + 1;
-  const count = +/element vertex (\d+)/.exec(headTxt)[1];
-  const little = /binary_little_endian/.test(headTxt);
-  if (!/binary/.test(headTxt)) throw new Error('ASCII PLY splats not supported');
-
-  const props = [];
-  for (const line of headTxt.slice(0, end).split('\n')) {
-    const m = /^property\s+(\S+)\s+(\S+)/.exec(line.trim());
-    if (m) props.push({ type: m[1], name: m[2] });
-  }
-  const TSIZE = {
-    float: 4,
-    float32: 4,
-    double: 8,
-    uchar: 1,
-    uint8: 1,
-    int: 4,
-    uint: 4,
-    short: 2,
-    ushort: 2,
-  };
-  const stride = props.reduce((a, p) => a + (TSIZE[p.type] || 4), 0);
-  const idx = {};
-  let off = 0;
-  for (const p of props) {
-    idx[p.name] = { off, type: p.type };
-    off += TSIZE[p.type] || 4;
-  }
-  const dv = new DataView(buf, dataStart);
-  const get = (row, name) => {
-    const f = idx[name];
-    if (!f) return 0;
-    const o = row * stride + f.off;
-    return f.type === 'double' ? dv.getFloat64(o, little) : dv.getFloat32(o, little);
-  };
-  const sigmoid = (x) => 1 / (1 + Math.exp(-x));
-
-  const pos = new Float32Array(count * 3);
-  const col = new Float32Array(count * 4);
-  const size = new Float32Array(count);
-  for (let i = 0; i < count; i++) {
-    pos[i * 3] = get(i, 'x');
-    pos[i * 3 + 1] = get(i, 'y');
-    pos[i * 3 + 2] = get(i, 'z');
-    col[i * 4] = clamp01(0.5 + C0 * get(i, 'f_dc_0'));
-    col[i * 4 + 1] = clamp01(0.5 + C0 * get(i, 'f_dc_1'));
-    col[i * 4 + 2] = clamp01(0.5 + C0 * get(i, 'f_dc_2'));
-    col[i * 4 + 3] = sigmoid(get(i, 'opacity'));
-    size[i] = Math.exp((get(i, 'scale_0') + get(i, 'scale_1') + get(i, 'scale_2')) / 3);
-  }
-  return subsample({ count, pos, col, size });
-}
-
-function subsample(s) {
-  if (s.count <= MAX_SPLATS) return s;
-  const stride = Math.ceil(s.count / MAX_SPLATS);
-  const n = Math.floor(s.count / stride);
-  const pos = new Float32Array(n * 3);
-  const col = new Float32Array(n * 4);
-  const size = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const j = i * stride;
-    pos.set(s.pos.subarray(j * 3, j * 3 + 3), i * 3);
-    col.set(s.col.subarray(j * 4, j * 4 + 4), i * 4);
-    size[i] = s.size[j];
-  }
-  return { count: n, pos, col, size };
-}
-
-const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 function view(splat, mount) {
   const w = mount.clientWidth || 800;
@@ -173,8 +73,7 @@ function view(splat, mount) {
         gl_FragColor = vec4(vColor.rgb, vColor.a * a * uOpacity);
       }`,
   });
-  const points = new THREE.Points(geo, material);
-  scene.add(points);
+  scene.add(new THREE.Points(geo, material));
 
   // Frame the cloud.
   const box = new THREE.Box3().setFromBufferAttribute(geo.getAttribute('position'));
@@ -185,10 +84,13 @@ function view(splat, mount) {
   controls.target.copy(center);
   controls.update();
 
-  // Back-to-front index sort for correct alpha, throttled and only when moved.
+  // Back-to-front index sort for correct alpha. Throttled AND skipped when the
+  // camera has not moved, so a static preview does not peg the main thread.
   const idxAttr = geo.getIndex();
   const dir = new THREE.Vector3();
   const depth = new Float32Array(splat.count);
+  const lastPos = new THREE.Vector3(Infinity, 0, 0);
+  const lastQuat = new THREE.Quaternion(2, 0, 0, 0);
   let lastSort = 0;
   const sort = () => {
     camera.getWorldDirection(dir);
@@ -203,21 +105,46 @@ function view(splat, mount) {
     }
     order.sort((a, b) => depth[b] - depth[a]);
     idxAttr.needsUpdate = true;
+    lastPos.copy(camera.position);
+    lastQuat.copy(camera.quaternion);
   };
   sort();
 
   const gizmo = new ViewHelper(camera, renderer.domElement);
   let gizmoOn = true;
   buildPanel(mount, uniforms, splat.count, (on) => (gizmoOn = on));
-  renderer.domElement.addEventListener('pointerup', (e) => gizmoOn && gizmo.handleClick(e));
+  const onClick = (e) => gizmoOn && gizmo.handleClick(e);
+  renderer.domElement.addEventListener('pointerup', onClick);
+
+  const onResize = () => {
+    const W = mount.clientWidth || w;
+    const H = mount.clientHeight || h;
+    renderer.setSize(W, H);
+    camera.aspect = W / H;
+    camera.updateProjectionMatrix();
+  };
+  window.addEventListener('resize', onResize);
 
   renderer.autoClear = false;
   const clock = new THREE.Clock();
   (function loop(t) {
+    // When Preview is toggled off the pane (and canvas) leaves the DOM; tear the
+    // loop and GPU resources down so repeated opens do not exhaust WebGL contexts.
+    if (!renderer.domElement.isConnected) {
+      window.removeEventListener('resize', onResize);
+      geo.dispose();
+      material.dispose();
+      renderer.dispose();
+      renderer.forceContextLoss();
+      return;
+    }
     requestAnimationFrame(loop);
     const dt = clock.getDelta();
     controls.update();
-    if (t - lastSort > 80) {
+    if (
+      t - lastSort > 80 &&
+      (!camera.position.equals(lastPos) || !camera.quaternion.equals(lastQuat))
+    ) {
       sort();
       lastSort = t;
     }
@@ -226,14 +153,6 @@ function view(splat, mount) {
     renderer.render(scene, camera);
     if (gizmoOn) gizmo.render(renderer);
   })(0);
-
-  window.addEventListener('resize', () => {
-    const W = mount.clientWidth || w;
-    const H = mount.clientHeight || h;
-    renderer.setSize(W, H);
-    camera.aspect = W / H;
-    camera.updateProjectionMatrix();
-  });
 }
 
 function buildPanel(mount, uniforms, count, onGizmo) {

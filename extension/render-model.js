@@ -37,7 +37,7 @@ export function renderModel(buf, mount, ext) {
   }
 }
 
-function parseSafetensors(buf) {
+export function parseSafetensors(buf) {
   const dv = new DataView(buf);
   const n = Number(dv.getBigUint64(0, true));
   const header = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 8, n)));
@@ -104,11 +104,17 @@ class Reader {
       case 8:
         return this.str();
       case 9: {
+        // Metadata arrays can be huge (a tokenizer vocab is 100k+ entries). Keep a
+        // small sample for display and skip the rest so we stay aligned without
+        // allocating the whole thing.
         const et = this.u32();
         const n = this.u64();
-        const arr = [];
-        for (let i = 0; i < n; i++) arr.push(this.value(et));
-        return arr;
+        const CAP = 64;
+        const items = [];
+        const m = Math.min(n, CAP);
+        for (let i = 0; i < m; i++) items.push(this.value(et));
+        for (let i = m; i < n; i++) this.skip(et);
+        return { type: 'array', n, items };
       }
       case 10:
         this.p += 8;
@@ -123,9 +129,22 @@ class Reader {
         throw new Error('bad gguf value type ' + type);
     }
   }
+  // Advance past a value without allocating it (used to skip long array tails).
+  skip(type) {
+    const FIXED = { 0: 1, 1: 1, 2: 2, 3: 2, 4: 4, 5: 4, 6: 4, 7: 1, 10: 8, 11: 8, 12: 8 };
+    if (type === 8) {
+      this.p += this.u64();
+    } else if (type === 9) {
+      const et = this.u32();
+      const n = this.u64();
+      for (let i = 0; i < n; i++) this.skip(et);
+    } else {
+      this.p += FIXED[type];
+    }
+  }
 }
 
-function parseGguf(buf) {
+export function parseGguf(buf) {
   const r = new Reader(buf);
   if (r.u32() !== 0x46554747) throw new Error('not a GGUF file');
   const version = r.u32();
@@ -208,8 +227,8 @@ function humanParams(n) {
 }
 
 function short(v) {
-  if (Array.isArray(v))
-    return `[${v.length}] ` + v.slice(0, 6).join(', ') + (v.length > 6 ? ' …' : '');
+  if (v && typeof v === 'object' && v.type === 'array')
+    return `[${v.n}] ` + v.items.slice(0, 6).join(', ') + (v.n > 6 ? ' …' : '');
   const s = String(v);
   return s.length > 120 ? s.slice(0, 120) + ' …' : s;
 }

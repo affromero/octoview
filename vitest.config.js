@@ -7,7 +7,14 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
-      include: ['extension/core.js'],
+      // The pure, unit-tested logic (DOM/WebGL renderers are covered by the e2e).
+      include: [
+        'extension/core.js',
+        'extension/render-array.js',
+        'extension/render-model.js',
+        'extension/splat-decode.js',
+        'extension/unzip.js',
+      ],
     },
   },
 });

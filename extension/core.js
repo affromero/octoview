@@ -22,6 +22,7 @@
     '.tif',
     '.tiff',
     '.splat',
+    '.splattie',
   ];
 
   const extname = (name) => {
@@ -35,14 +36,17 @@
     /^\/[^/]+\/[^/]+\/blob\//.test(pathname) && isSupported(name);
 
   // GitHub's "Raw" button is github.com/OWNER/REPO/raw/REF/PATH (302s to the
-  // tokenized raw host). Prefer the real anchor (correct ref encoding); fall back
-  // to transforming the current blob path. Never construct the raw host URL — it
-  // would lack the token and 404 on private repos.
+  // tokenized raw host with the page cookies). Match the anchor whose path maps to
+  // the CURRENT blob (a page can contain unrelated raw links, e.g. in a rendered
+  // README), else construct it from the blob path. github.com/.../raw/... needs no
+  // token: it 302s to the tokenized host when the request carries the session.
   const pickRawUrl = (doc, href) => {
-    const gh = [...doc.querySelectorAll('a[href*="/raw/"]')].find((a) =>
+    const want = new URL(href, 'https://github.com').pathname.replace('/blob/', '/raw/');
+    const anchors = [...doc.querySelectorAll('a[href*="/raw/"]')].filter((a) =>
       a.href.startsWith('https://github.com/')
     );
-    return gh ? gh.href : href.replace('/blob/', '/raw/');
+    const match = anchors.find((a) => new URL(a.href).pathname === want);
+    return match ? match.href : 'https://github.com' + want;
   };
 
   const decode = (buf) => new TextDecoder().decode(buf);
@@ -72,6 +76,23 @@
     }
   }
 
+  // Strip active content from rendered markdown (a notebook is untrusted input):
+  // drop script-ish elements, on* handlers, and javascript: URLs. github's CSP
+  // also refuses inline handlers, but this keeps the module correct on its own.
+  function sanitize(root) {
+    root
+      .querySelectorAll('script, iframe, object, embed, link, meta, base, form, style')
+      .forEach((el) => el.remove());
+    for (const el of root.querySelectorAll('*')) {
+      for (const attr of [...el.attributes]) {
+        const n = attr.name.toLowerCase();
+        if (n.startsWith('on')) el.removeAttribute(attr.name);
+        else if (/^(href|src|xlink:href)$/.test(n) && /^\s*javascript:/i.test(attr.value))
+          el.removeAttribute(attr.name);
+      }
+    }
+  }
+
   function addText(wrap, text, isErr) {
     const pre = document.createElement('pre');
     pre.className = 'ov-nb-text' + (isErr ? ' ov-nb-err' : '');
@@ -88,6 +109,7 @@
         const d = document.createElement('div');
         d.className = 'ov-md';
         d.innerHTML = g.marked.parse(src);
+        sanitize(d);
         wrap.appendChild(d);
       } else if (cell.cell_type === 'code') {
         const pre = document.createElement('pre');

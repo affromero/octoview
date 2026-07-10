@@ -48,7 +48,7 @@ const CASES = [
   {
     name: 'report.html',
     sample: 'samples/report.html',
-    ok: (r) => /Interactive HTML report/.test(r.frameText),
+    ok: (r) => /Training report/.test(r.frameText) && /Validation loss/.test(r.frameText),
   },
   {
     name: 'notebook.ipynb',
@@ -102,6 +102,11 @@ const CASES = [
   {
     name: 'splat.ply',
     sample: 'samples/splat.ply',
+    ok: (r) => r.mainCanvas && /splats/.test(r.text),
+  },
+  {
+    name: 'head.splattie',
+    sample: 'samples/head.splattie',
     ok: (r) => r.mainCanvas && /splats/.test(r.text),
   },
 ];

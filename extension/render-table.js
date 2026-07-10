@@ -58,6 +58,9 @@ function cell(v) {
   if (v == null) return '';
   if (typeof v === 'bigint') return v.toString();
   if (v instanceof Date) return v.toISOString();
-  if (typeof v === 'object') return JSON.stringify(v);
+  // Nested BigInt (LIST<INT64>, STRUCT with int64 fields) would throw in
+  // JSON.stringify, so coerce it in a replacer.
+  if (typeof v === 'object')
+    return JSON.stringify(v, (_, x) => (typeof x === 'bigint' ? x.toString() : x));
   return String(v);
 }
