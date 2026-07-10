@@ -95,13 +95,13 @@ const CASES = [
     ok: (r) => r.mainCanvas && /EXR/.test(r.text),
   },
   {
-    name: 'head.splat',
-    sample: 'samples/head.splat',
+    name: 'capybara.splat',
+    sample: 'samples/capybara.splat',
     ok: (r) => r.mainCanvas && /splats/.test(r.text),
   },
   {
-    name: 'splat.ply',
-    sample: 'samples/splat.ply',
+    name: 'capybara.ply',
+    sample: 'samples/capybara.ply',
     ok: (r) => r.mainCanvas && /splats/.test(r.text),
   },
   {

@@ -228,15 +228,33 @@ describe('splat decoders', () => {
     expect(s.col[3]).toBeCloseTo(128 / 255);
   });
 
-  it('detects a 3DGS ply vs a plain ply, and decodes the real head capture', () => {
-    const splatPly = fixture('splat.ply');
-    const pointPly = fixture('points.ply');
-    expect(isPlySplat(splatPly)).toBe(true);
-    expect(isPlySplat(pointPly)).toBe(false);
-    const s = parsePlySplat(splatPly);
-    expect(s.count).toBe(20018);
-    // colors are sigmoid/SH-decoded into [0,1]
-    for (let i = 0; i < s.col.length; i++) expect(s.col[i]).toBeGreaterThanOrEqual(0);
+  it('decodes a standard float 3DGS ply', () => {
+    const ply = makePlySplat([
+      { x: 1, y: 2, z: 3, f_dc_0: 0, opacity: 0, scale_0: 0, scale_1: 0, scale_2: 0 },
+    ]);
+    expect(isPlySplat(ply)).toBe(true);
+    const s = parsePlySplat(ply);
+    expect(s.count).toBe(1);
+    expect([s.pos[0], s.pos[1], s.pos[2]]).toEqual([1, 2, 3]);
+    expect(s.col[0]).toBeCloseTo(0.5); // 0.5 + C0*0
+    expect(s.col[3]).toBeCloseTo(0.5); // sigmoid(0)
+  });
+
+  it('decodes the compressed (PlayCanvas) capybara ply, and rejects a plain ply', () => {
+    const capy = fixture('capybara.ply');
+    expect(isPlySplat(capy)).toBe(true);
+    expect(isPlySplat(fixture('points.ply'))).toBe(false);
+    const s = parsePlySplat(capy);
+    expect(s.count).toBe(262144);
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let i = 0; i < s.col.length; i++) {
+      if (s.col[i] < lo) lo = s.col[i];
+      if (s.col[i] > hi) hi = s.col[i];
+    }
+    expect(lo).toBeGreaterThanOrEqual(0);
+    expect(hi).toBeLessThanOrEqual(1);
+    expect(s.size.some((v) => v > 0)).toBe(true);
   });
 
   it('computes the data offset from bytes, not string length (multibyte header)', () => {
