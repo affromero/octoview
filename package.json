@@ -11,6 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "node test/render.e2e.mjs",
+    "build:chrome": "node scripts/build-chrome.mjs",
+    "test:chrome": "npm run build:chrome && node test/chrome.e2e.mjs",
     "coverage": "vitest run --coverage",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{js,mjs,json,md,yml,yaml}\"",
