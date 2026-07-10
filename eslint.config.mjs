@@ -28,6 +28,7 @@ export default [
       'extension/splat-decode.js',
       'extension/unzip.js',
       'extension/splat-viewer.js',
+      'extension/splattie-viewer.js',
     ],
     languageOptions: { sourceType: 'module' },
   },

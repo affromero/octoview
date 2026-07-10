@@ -62,4 +62,14 @@ JS
 npx esbuild build/spark.entry.mjs --bundle --format=esm --minify \
   --outfile=extension/vendor/spark.esm.js
 
-echo "vendored: marked.min.js, three3d.esm.js, hyparquet.esm.js, plotly.esm.js, spark.esm.js"
+# splattie-widget (@afromero/splattie-widget): the rigged/interactive splat format
+# (LBS skinning + cursor-following state machine on top of Spark). Bundled
+# self-contained (Spark + jszip inlined) and auto-registers <splattie-widget>.
+# Runs in the splattie-viewer extension page; lazy-loaded there only for .splattie.
+cat > build/splattie.entry.mjs <<'JS'
+import '@afromero/splattie-widget';
+JS
+npx esbuild build/splattie.entry.mjs --bundle --format=esm --minify \
+  --outfile=extension/vendor/splattie-widget.esm.js
+
+echo "vendored: marked, three3d, hyparquet, plotly, spark, splattie-widget"
