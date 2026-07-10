@@ -129,13 +129,19 @@ working on its own.
   (mkkellogg; scales are LINEAR, no exp), `.sog` v2 (zip of webp textures, codebook
   scales/colors, inverse-log means; webp decoded via WebGL2 readback with
   premultiply off — a 2D canvas corrupts the alpha-carrying data channels).
+- `.lcc` (XGRIDS) is a MULTI-FILE container: the `.lcc` metadata blob plus sibling
+  `index.bin` + `data.bin` fetched from the same GitHub directory (hence the
+  `media.githubusercontent.com` host permission). `lcc-decode.js` sums the LOD
+  records — so it must guard against overlapping records inflating the count past
+  `data.bin/32` and cap to `MAX_SPLATS` (it had neither; both added).
+- `.rad` is a Spark-native LOD format with NO main-thread decoder: it renders only
+  through the Spark viewer page, so it works in **Safari only** (Chrome/Firefox
+  block Spark's worker and show "RAD previews require the Spark viewer"). This is
+  the one format that isn't cross-browser — keep the table/footnote honest about it.
 - Tables: `.parquet` (hyparquet), `.arrow`/`.feather`/`.ipc` (flechette — chosen
   over apache-arrow, which is 8× larger and defeats tree-shaking).
 - Model graphs: `.safetensors`/`.gguf` (header tables), `.onnx` (hand-rolled
   protobuf wire reader + a longest-path SVG graph; NOT protobufjs, too heavy).
-- Dropped/deferred: `.rad` dropped (no GS spec, collides with Radiance); `.lcc`
-  deferred (open spec, MIT reader, but a multi-file container that fits a
-  single-blob previewer poorly).
 - Fixtures are generated from real external encoders, not our own decoders (same-
   scene cross-checks catch format misreads): `@playcanvas/splat-transform` (sog,
   spz), Spark `transcodeSpz` (spz v4), mkkellogg `create-ksplat`, pyarrow (arrow),
