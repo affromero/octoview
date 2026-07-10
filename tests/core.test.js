@@ -81,6 +81,39 @@ describe('pickRawUrl', () => {
   });
 });
 
+describe('Git LFS download URLs', () => {
+  const blobUrl = 'https://github.com/o/r/blob/main/assets/model.obj';
+  const rawUrl = 'https://github.com/o/r/raw/main/assets/model.obj';
+
+  it('uses the matching GitHub media link from the blob page', () => {
+    const doc = document.createElement('div');
+    doc.innerHTML =
+      '<a href="https://media.githubusercontent.com/media/o/r/main/assets/other.obj">Other</a>' +
+      '<a href="https://media.githubusercontent.com/media/o/r/main/assets/model.obj?token=signed">Download</a>';
+    expect(O.lfsDownloadUrl(doc, rawUrl)).toBe(
+      'https://media.githubusercontent.com/media/o/r/main/assets/model.obj?token=signed'
+    );
+  });
+
+  it("uses GitHub's public media URL when the matching link is absent", () => {
+    const doc = document.createElement('div');
+    doc.innerHTML = '<a href="https://example.com/media/o/r/main/assets/model.obj">External</a>';
+    expect(O.lfsDownloadUrl(doc, rawUrl)).toBe(
+      'https://media.githubusercontent.com/media/o/r/main/assets/model.obj'
+    );
+    expect(O.lfsDownloadUrl(doc, blobUrl)).toBeNull();
+  });
+
+  it('parses only complete Git LFS pointer files', () => {
+    const oid = 'a'.repeat(64);
+    expect(
+      O.lfsPointer(enc(`version https://git-lfs.github.com/spec/v1\noid sha256:${oid}\nsize 123\n`))
+    ).toEqual({ oid, size: '123' });
+    expect(O.lfsPointer(enc(`version https://git-lfs.github.com/spec/v1\nsize 123\n`))).toBeNull();
+    expect(O.lfsPointer(enc('not an LFS pointer'))).toBeNull();
+  });
+});
+
 describe('renderNotebook', () => {
   it('renders markdown, code, and text/image/html outputs', () => {
     const mount = document.createElement('div');

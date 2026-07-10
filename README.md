@@ -112,8 +112,10 @@ Everything renders **inline in the blob view**, no new tab. Clicking **Preview**
 the rendered file; clicking it again swaps back.
 
 - **Private-repo access.** The content script runs on `github.com`, so it has your cookies. It
-  resolves the file's tokenized `raw.githubusercontent.com` URL and fetches the bytes. No PAT, no
-  OAuth.
+  resolves the file's tokenized `raw.githubusercontent.com` URL and fetches the bytes. When that
+  response is a Git LFS pointer, octoview follows GitHub's page-provided LFS download URL instead.
+  GitHub-hosted LFS files work for private repos with the existing browser session — no PAT or OAuth.
+  External LFS remotes are intentionally out of scope.
 - **Rendering under GitHub's CSP.** A content script runs in an isolated world that github's CSP does
   not bind, so octoview's own renderers (three.js on a `<canvas>`, DOM tables, notebook cells) run
   right there in the page. Heavy renderers (the three.js bundle) are lazy-imported only when their
@@ -137,8 +139,8 @@ The dispatch, URL resolution, and notebook rendering live in
 ```mermaid
 flowchart TD
     subgraph blob["github.com blob page (content-script isolated world)"]
-        content["Preview button · cookie fetch<br/>(content.js)"]
-        core["dispatch by extension · raw-URL resolve · notebook render<br/>(core.js, pure — unit-tested)"]
+        content["Preview button · cookie fetch<br/>LFS download fallback<br/>(content.js)"]
+        core["dispatch by extension · raw/LFS-URL resolve · notebook render<br/>(core.js, pure — unit-tested)"]
         subgraph renderers["Lazy-imported renderers"]
             r3d["render3d.js<br/>mesh · point cloud"]
             rsplat["render-splat.js<br/>main-thread splats"]
@@ -153,10 +155,13 @@ flowchart TD
     end
 
     gh[("raw.githubusercontent.com<br/>(session cookies)")]
+    lfs[("media.githubusercontent.com<br/>(GitHub-hosted LFS object)")]
     vendor[("vendor/<br/>three.js · Plotly · Spark<br/>hyparquet · flechette · fflate+fzstd · marked")]
 
     content -->|bytes| core
-    gh -->|fetch| content
+    gh -->|raw bytes or LFS pointer| content
+    content -->|LFS pointer → download| lfs
+    lfs -->|bytes| content
     core --> renderers
     rsplat --> decode
     vendor -.-> renderers
@@ -185,9 +190,10 @@ adds a small button on GitHub pages; the larger renderer bundles load only after
 
 Previews still need memory while a file is being decoded and rendered, especially for 3D assets and
 scientific images. To keep that bounded, octoview limits a normal source download to **64 MiB** and
-model metadata reads to **32 MiB**. ZIP-based previews (`.npz` and `.splattie`) also refuse archives
-whose uncompressed entries total more than **64 MiB**. A preview in progress can be started only
-once, and is cancelled if you close the preview or navigate away.
+model metadata reads to **32 MiB**; those same limits apply to GitHub-hosted Git LFS downloads.
+ZIP-based previews (`.npz` and `.splattie`) also refuse archives whose uncompressed entries total
+more than **64 MiB**. A preview in progress can be started only once, and is cancelled if you close
+the preview or navigate away.
 
 Those limits apply to source bytes, not every renderer's decoded representation: an EXR/HDR image,
 for example, expands into float pixels and a canvas. Keep very high-resolution images and unusually
@@ -265,8 +271,8 @@ which is how Safari-specific breakage that jsdom cannot see gets caught.
 ```
 extension/
   manifest.json        MV3 config (content scripts, web-accessible render modules)
-  core.js              pure and DOM logic: dispatch, URL resolve, notebook render (unit-tested)
-  content.js           github.com: button, fetch with cookies, inline render pane
+  core.js              pure and DOM logic: dispatch, raw/LFS URL resolve, notebook render (unit-tested)
+  content.js           github.com: button, cookie fetch + GitHub LFS download, inline render pane
   viewer.html          extension page hosting a report's sandboxed live frame (CSP probe + fallback)
   render3d.js          three.js mesh and point-cloud renderer (gizmo, point sliders)
   render-splat.js      main-thread Gaussian splat renderer (.splat, 3DGS/compressed .ply, .splattie)
