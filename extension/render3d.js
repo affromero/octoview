@@ -13,6 +13,16 @@ import {
   ViewHelper,
 } from './vendor/three3d.esm.js';
 
+// Source coordinate systems. three.js is OpenGL (Y-up, right-handed), so each
+// entry is the rotation that brings data authored in that convention up into
+// this view. Data is assumed OpenGL unless the viewer says otherwise.
+const X = new THREE.Vector3(1, 0, 0);
+const CONVENTIONS = {
+  'OpenGL (Y-up)': new THREE.Quaternion(),
+  'Z-up (Blender, ROS, CAD)': new THREE.Quaternion().setFromAxisAngle(X, -Math.PI / 2),
+  'OpenCV (Y-down, Z-fwd)': new THREE.Quaternion().setFromAxisAngle(X, Math.PI),
+};
+
 export function render3D(buf, mount, ext) {
   ensureStyle();
   mount.style.position = 'relative';
@@ -52,29 +62,47 @@ export function render3D(buf, mount, ext) {
 
   let pointsMat = null;
   let maxDim = 1;
-  let boxMinY = 0;
+  let grid = null;
+  const pivot = new THREE.Group();
+  scene.add(pivot);
 
-  const frame = (obj) => {
-    scene.add(obj);
-    const box = new THREE.Box3().setFromObject(obj);
+  // Recompute bounds (with the pivot's current orientation) and frame the camera.
+  const reframe = () => {
+    pivot.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(pivot);
+    if (box.isEmpty()) return;
     const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    boxMinY = box.min.y;
     maxDim = Math.max(size.x, size.y, size.z) || 1;
     camera.near = maxDim / 1000;
     camera.far = maxDim * 1000;
-    camera.position.copy(center).add(new THREE.Vector3(0, size.y * 0.15, maxDim * 2.2));
+    camera.position.set(0, size.y * 0.15, maxDim * 2.2);
     camera.updateProjectionMatrix();
-    controls.target.copy(center);
+    controls.target.set(0, 0, 0);
     controls.update();
+    if (grid) grid.position.y = box.min.y;
+  };
+
+  // Center the object at the pivot origin so orientation changes rotate about its
+  // center, not the world origin.
+  const frame = (obj) => {
+    const c = new THREE.Box3().setFromObject(obj).getCenter(new THREE.Vector3());
+    obj.position.sub(c);
+    pivot.add(obj);
+    reframe();
+  };
+
+  // Re-interpret the source axes and re-frame (the gizmo keeps showing world XYZ).
+  const setConvention = (name) => {
+    pivot.quaternion.copy(CONVENTIONS[name] || CONVENTIONS['OpenGL (Y-up)']);
+    reframe();
   };
 
   let gizmoOn = true;
 
   const afterLoad = () => {
-    const grid = new THREE.GridHelper(maxDim * 4, 16, 0x30363d, 0x1c2128);
-    grid.position.y = boxMinY;
+    grid = new THREE.GridHelper(maxDim * 4, 16, 0x30363d, 0x1c2128);
     scene.add(grid);
+    reframe(); // place the grid at the object's base under the current orientation
 
     if (pointsMat) {
       pointsMat.size = maxDim * 0.02;
@@ -85,7 +113,7 @@ export function render3D(buf, mount, ext) {
     renderer.domElement.addEventListener('pointerup', (e) => {
       if (gizmoOn) viewHelper.handleClick(e);
     });
-    buildPanel(mount, pointsMat, maxDim, (on) => (gizmoOn = on));
+    buildPanel(mount, pointsMat, maxDim, (on) => (gizmoOn = on), setConvention);
 
     const resize = () => {
       const W = mount.clientWidth || w;
@@ -168,9 +196,25 @@ export function render3D(buf, mount, ext) {
   }
 }
 
-function buildPanel(mount, pointsMat, maxDim, onGizmo) {
+function buildPanel(mount, pointsMat, maxDim, onGizmo, onConvention) {
   const panel = document.createElement('div');
   panel.className = 'ov3d-panel';
+
+  // Source coordinate system: reinterpret the input axes so it stands up right.
+  const coords = document.createElement('label');
+  coords.className = 'ov3d-slider';
+  coords.append('Coords');
+  const select = document.createElement('select');
+  select.className = 'ov3d-select';
+  for (const name of Object.keys(CONVENTIONS)) {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    select.appendChild(opt);
+  }
+  select.onchange = () => onConvention(select.value);
+  coords.appendChild(select);
+  panel.appendChild(coords);
 
   const gizmo = document.createElement('button');
   gizmo.className = 'ov3d-btn on';
@@ -224,6 +268,7 @@ function ensureStyle() {
     .ov3d-btn{background:#21262d;border:1px solid #30363d;color:#c9d1d9;border-radius:6px;padding:4px 10px;cursor:pointer;font:inherit}
     .ov3d-btn.on{background:#238636;border-color:#2ea043;color:#fff}
     .ov3d-slider{display:flex;flex-direction:column;gap:3px}
-    .ov3d-slider input{width:132px;accent-color:#2ea043}`;
+    .ov3d-slider input{width:132px;accent-color:#2ea043}
+    .ov3d-select{width:150px;background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;padding:3px 6px;font:inherit}`;
   document.head.appendChild(s);
 }
