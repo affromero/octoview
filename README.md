@@ -132,6 +132,51 @@ the rendered file; clicking it again swaps back.
 The dispatch, URL resolution, and notebook rendering live in
 [`extension/core.js`](extension/core.js), kept free of browser APIs so they run under Vitest.
 
+### Architecture
+
+```mermaid
+flowchart TD
+    subgraph blob["github.com blob page (content-script isolated world)"]
+        content["Preview button · cookie fetch<br/>(content.js)"]
+        core["dispatch by extension · raw-URL resolve · notebook render<br/>(core.js, pure — unit-tested)"]
+        subgraph renderers["Lazy-imported renderers"]
+            r3d["render3d.js<br/>mesh · point cloud"]
+            rsplat["render-splat.js<br/>main-thread splats"]
+            rmisc["render-array · render-table<br/>render-model · render-image"]
+        end
+        decode["splat-decode.js<br/>.splat · 3DGS/compressed .ply · .splattie"]
+    end
+
+    subgraph pages["Extension viewer pages (octoview-controlled CSP)"]
+        viewer["viewer.html<br/>live report in sandboxed srcdoc<br/>(inline probe = capability check)"]
+        sparkview["splat-viewer · splattie-viewer<br/>Spark WASM + workers<br/>(splat-boot.js error relay)"]
+    end
+
+    gh[("raw.githubusercontent.com<br/>(session cookies)")]
+    vendor[("vendor/<br/>three.js · Plotly · Spark<br/>hyparquet · fflate · marked")]
+
+    content -->|bytes| core
+    gh -->|fetch| content
+    core --> renderers
+    rsplat --> decode
+    vendor -.-> renderers
+    content -->|report HTML, postMessage| viewer
+    content -->|splat bytes, postMessage| sparkview
+    viewer -->|"no beacon (CSP refused)"| content
+    sparkview -->|"error relay → main-thread fallback"| rsplat
+
+    subgraph builds["Distribution (extension/ is the Safari source of truth)"]
+        safari["build-safari.sh<br/>signed .xcarchive"]
+        chrome["build-chrome.mjs<br/>strict CSP + sandbox viewer page"]
+        firefox["build-firefox.mjs<br/>strict CSP, no Spark bundles"]
+    end
+```
+
+Per-browser reality of the two relaxed-CSP paths: Safari runs live reports via
+`'unsafe-inline'` and Spark via `blob:` workers; Chrome runs live reports via its manifest
+sandbox page while Spark falls back to the main-thread renderer; Firefox has neither
+mechanism, so reports show the static frame and splats always render main-thread.
+
 ## Related work
 
 octoview is a browser extension, so the closest comparison is other GitHub extensions. Nearly all of them enhance navigation or polish the UI. **None render the file's contents**, let alone ML and data formats. octoview is the one that turns a blob page into a live preview of the file itself.
