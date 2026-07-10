@@ -48,7 +48,11 @@ function view(splat, mount) {
   for (let i = 0; i < splat.count; i++) order[i] = i;
   geo.setIndex(new THREE.Uint32BufferAttribute(order, 1));
 
-  const uniforms = { uScale: { value: 1 }, uOpacity: { value: 1 } };
+  // uSizeFactor maps a world-space gaussian radius to screen pixels
+  // (2 * viewportHeightPx * projection[1][1], covering ~2 std devs so the round
+  // sprites overlap into a surface instead of reading as separate points). It is
+  // refreshed each frame below because it depends on the viewport and projection.
+  const uniforms = { uScale: { value: 1 }, uOpacity: { value: 1 }, uSizeFactor: { value: 1200 } };
   const material = new THREE.ShaderMaterial({
     uniforms,
     transparent: true,
@@ -56,13 +60,14 @@ function view(splat, mount) {
     depthWrite: false,
     blending: THREE.NormalBlending,
     vertexShader: `
-      attribute vec4 color; attribute float size; uniform float uScale;
+      attribute vec4 color; attribute float size;
+      uniform float uScale; uniform float uSizeFactor;
       varying vec4 vColor;
       void main(){
         vColor = color;
         vec4 mv = modelViewMatrix * vec4(position,1.0);
         gl_Position = projectionMatrix * mv;
-        gl_PointSize = clamp(size * 900.0 * uScale / -mv.z, 1.0, 96.0);
+        gl_PointSize = clamp(size * uScale * uSizeFactor / -mv.z, 1.5, 512.0);
       }`,
     fragmentShader: `
       varying vec4 vColor; uniform float uOpacity;
@@ -141,6 +146,8 @@ function view(splat, mount) {
     requestAnimationFrame(loop);
     const dt = clock.getDelta();
     controls.update();
+    uniforms.uSizeFactor.value =
+      2 * renderer.domElement.height * camera.projectionMatrix.elements[5];
     if (
       t - lastSort > 80 &&
       (!camera.position.equals(lastPos) || !camera.quaternion.equals(lastQuat))
