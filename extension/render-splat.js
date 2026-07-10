@@ -90,7 +90,12 @@ function view(splat, mount) {
   // (2 * viewportHeightPx * projection[1][1], covering ~2 std devs so the round
   // sprites overlap into a surface instead of reading as separate points). It is
   // refreshed each frame below because it depends on the viewport and projection.
-  const uniforms = { uScale: { value: 1 }, uOpacity: { value: 1 }, uSizeFactor: { value: 1200 } };
+  const uniforms = {
+    uScale: { value: 1 },
+    uOpacity: { value: 1 },
+    uFalloff: { value: 1 },
+    uSizeFactor: { value: 1200 },
+  };
   const material = new THREE.ShaderMaterial({
     uniforms,
     transparent: true,
@@ -108,10 +113,10 @@ function view(splat, mount) {
         gl_PointSize = clamp(size * uScale * uSizeFactor / -mv.z, 1.5, 512.0);
       }`,
     fragmentShader: `
-      varying vec4 vColor; uniform float uOpacity;
+      varying vec4 vColor; uniform float uOpacity; uniform float uFalloff;
       void main(){
         float d = length(gl_PointCoord - 0.5) * 2.0;
-        float a = exp(-4.0 * d * d);
+        float a = exp(-4.0 * d * d * uFalloff);
         if (a < 0.02) discard;
         gl_FragColor = vec4(vColor.rgb, vColor.a * a * uOpacity);
       }`,
@@ -155,7 +160,7 @@ function view(splat, mount) {
 
   const gizmo = new ViewHelper(camera, renderer.domElement);
   let gizmoOn = true;
-  buildPanel(mount, uniforms, splat.count, (on) => (gizmoOn = on));
+  buildPanel(mount, uniforms, splat.count, renderer, (on) => (gizmoOn = on));
   const onClick = (e) => gizmoOn && gizmo.handleClick(e);
   renderer.domElement.addEventListener('pointerup', onClick);
 
@@ -200,7 +205,7 @@ function view(splat, mount) {
   })(0);
 }
 
-function buildPanel(mount, uniforms, count, onGizmo) {
+function buildPanel(mount, uniforms, count, renderer, onGizmo) {
   const panel = document.createElement('div');
   panel.className = 'ov3d-panel';
   const info = document.createElement('div');
@@ -219,6 +224,27 @@ function buildPanel(mount, uniforms, count, onGizmo) {
   panel.appendChild(gizmo);
   panel.appendChild(slider('Size', 0.1, 4, 0.05, 1, (v) => (uniforms.uScale.value = v)));
   panel.appendChild(slider('Opacity', 0.1, 1, 0.02, 1, (v) => (uniforms.uOpacity.value = v)));
+  panel.appendChild(slider('Falloff', 0, 1, 0.05, 1, (v) => (uniforms.uFalloff.value = v)));
+  const background = document.createElement('label');
+  background.className = 'ov3d-slider';
+  background.append('Background');
+  const select = document.createElement('select');
+  for (const [label] of [
+    ['Midnight', 0x0d1117],
+    ['Slate', 0x21262d],
+    ['White', 0xf6f8fa],
+  ])
+    select.add(new Option(label, label));
+  select.onchange = () => {
+    const [, color] = [
+      ['Midnight', 0x0d1117],
+      ['Slate', 0x21262d],
+      ['White', 0xf6f8fa],
+    ].find(([label]) => label === select.value);
+    renderer.setClearColor(color);
+  };
+  background.appendChild(select);
+  panel.appendChild(background);
   mount.appendChild(panel);
 }
 
@@ -256,6 +282,7 @@ function ensureStyle() {
     .ov3d-btn{background:#21262d;border:1px solid #30363d;color:#c9d1d9;border-radius:6px;padding:4px 10px;cursor:pointer;font:inherit}
     .ov3d-btn.on{background:#238636;border-color:#2ea043;color:#fff}
     .ov3d-slider{display:flex;flex-direction:column;gap:3px}
-    .ov3d-slider input{width:132px;accent-color:#2ea043}`;
+    .ov3d-slider input{width:132px;accent-color:#2ea043}
+    .ov3d-slider select{width:132px;background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;padding:3px 6px;font:inherit}`;
   document.head.appendChild(s);
 }

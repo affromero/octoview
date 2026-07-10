@@ -20,7 +20,7 @@
         right: 12px;
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 9px;
         padding: 10px 12px;
         background: rgba(13, 17, 23, 0.82);
         border: 1px solid #30363d;
@@ -28,7 +28,33 @@
         font: 12px -apple-system, BlinkMacSystemFont, sans-serif;
         color: #e6edf3;
       }
-      .panel select {
+      .panel-title {
+        color: #7d8590;
+        font: 600 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .panel-slider,
+      .panel-select {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .panel-slider > span {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+      }
+      .panel output {
+        color: #8b949e;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .panel input {
+        width: 164px;
+        accent-color: #2ea043;
+      }
+      .panel select,
+      .panel button {
         width: 150px;
         background: #21262d;
         color: #c9d1d9;
@@ -36,6 +62,10 @@
         border-radius: 6px;
         padding: 3px 6px;
         font: inherit;
+      }
+      .panel button {
+        width: auto;
+        cursor: pointer;
       }
     </style>
   </head>
