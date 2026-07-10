@@ -111,12 +111,17 @@ async function render(pane, buf, ext) {
   if (ext === '.html' || ext === '.htm') {
     pane.classList.add('ov-fill');
     pane.style.height = '78vh';
-    pane.appendChild(sandboxFrame(O.decode(buf), 'ov-frame'));
+    pane.appendChild(reportFrame(O.decode(buf)));
   } else if (ext === '.ipynb') {
     pane.classList.add('ov-scroll');
     pane.style.maxHeight = '82vh';
     pane.style.overflow = 'auto';
-    O.renderNotebook(JSON.parse(O.decode(buf)), pane, (html) => sandboxFrame(html, 'ov-nb-out'));
+    O.renderNotebook(
+      JSON.parse(O.decode(buf)),
+      pane,
+      (html) => sandboxFrame(html, 'ov-nb-out'),
+      plotlyChart
+    );
   } else if (THREE_EXTS.includes(ext) || SPLAT_EXTS.includes(ext)) {
     pane.classList.add('ov-fill');
     pane.style.height = '78vh';
@@ -154,6 +159,56 @@ async function render(pane, buf, ext) {
   } else {
     msg(pane, 'No preview for ' + ext + ' yet.');
   }
+}
+
+// A Plotly MIME bundle renders LIVE: the vendored Plotly runs as our own code in
+// the isolated world (github's CSP does not bind it — same trick as three.js), so
+// the interactive chart GitHub strips works here without executing any notebook
+// script. The div returns synchronously; the lazy bundle fills it when loaded.
+function plotlyChart(spec) {
+  const div = document.createElement('div');
+  div.className = 'ov-nb-plotly';
+  // Plotly renders nothing into a zero-height box; honor the spec's height.
+  div.style.height = ((spec.layout && spec.layout.height) || 450) + 'px';
+  loadModule('vendor/plotly.esm.js')
+    .then(({ default: Plotly }) =>
+      Plotly.newPlot(div, spec.data || [], spec.layout || {}, {
+        responsive: true,
+        displaylogo: false,
+      })
+    )
+    .catch((e) => msg(div, "Couldn't render chart: " + e.message));
+  return div;
+}
+
+// Live report path: host the report inside the extension's own viewer page —
+// the one context whose CSP octoview controls. The viewer nests the report in a
+// sandboxed srcdoc frame that inherits the viewer's relaxed CSP, so the report's
+// own scripts EXECUTE, in an opaque origin (no browser.* APIs, no
+// extension-permission fetch, no github cookies — the trust level of today's
+// static frame, plus script execution). The viewer's inline handshake is the
+// capability probe: if Safari refuses 'unsafe-inline' for extension pages, or
+// github's CSP blocks the extension iframe, no ready beacon arrives and the
+// static sandboxFrame swaps in. Verified manually in Safari; the e2e harness can
+// only exercise the fallback (it has no extension origin).
+function reportFrame(html) {
+  const viewerUrl = browser.runtime.getURL('viewer.html');
+  const f = document.createElement('iframe');
+  f.className = 'ov-frame';
+  f.src = viewerUrl;
+  const fallback = setTimeout(swap, 800);
+  function swap() {
+    removeEventListener('message', onReady);
+    f.replaceWith(sandboxFrame(html, 'ov-frame'));
+  }
+  function onReady(e) {
+    if (e.source !== f.contentWindow || !e.data || e.data.type !== 'ov-live-ready') return;
+    clearTimeout(fallback);
+    removeEventListener('message', onReady);
+    e.source.postMessage({ type: 'ov-report', html }, new URL(viewerUrl).origin);
+  }
+  addEventListener('message', onReady);
+  return f;
 }
 
 // A sandboxed frame runs the report/output's scripts in an opaque origin. Under
@@ -203,6 +258,7 @@ function ensureStyle() {
       font:12.5px/1.5 ui-monospace,monospace;white-space:pre-wrap;color:#adbac7}
     #${PANE_ID} .ov-nb-err{color:#ff7b72}
     #${PANE_ID} .ov-nb-out{width:100%;height:360px;border:1px solid #30363d;border-radius:6px;background:#fff;margin:0 0 12px}
+    #${PANE_ID} .ov-nb-plotly{width:100%;border:1px solid #30363d;border-radius:6px;background:#fff;margin:0 0 12px;overflow:hidden}
     #${PANE_ID} .ov-nb-img{max-width:100%;background:#fff;border-radius:6px;margin:0 0 12px}
     #${PANE_ID} .ov-arr-meta{padding:14px 18px 6px;font:12.5px/1.5 ui-monospace,monospace;color:#adbac7}
     #${PANE_ID} .ov-arr-canvas{display:block;margin:0 18px 18px;border:1px solid #30363d;border-radius:6px}

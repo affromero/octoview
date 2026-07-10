@@ -105,6 +105,62 @@ describe('renderNotebook', () => {
     expect(mount.querySelector('img.ov-nb-img').src).toBe('data:image/png;base64,AAAA');
   });
 
+  it('routes a Plotly MIME bundle to the chart hook, over its text/html sibling', () => {
+    const mount = document.createElement('div');
+    const spec = { data: [{ type: 'bar', y: [1, 2] }], layout: { height: 320 } };
+    const nb = {
+      cells: [
+        {
+          cell_type: 'code',
+          source: ['fig.show()'],
+          outputs: [
+            {
+              output_type: 'display_data',
+              data: {
+                'application/vnd.plotly.v1+json': spec,
+                'text/html': ['<div>needs scripts</div>'],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const seen = [];
+    const chart = (s) => {
+      seen.push(s);
+      const d = document.createElement('div');
+      d.className = 'stub-chart';
+      return d;
+    };
+    O.renderNotebook(nb, mount, stubFrame, chart);
+    expect(seen).toEqual([spec]); // the live chart wins over the script-needing html
+    expect(mount.querySelector('.stub-chart')).not.toBeNull();
+    expect(mount.querySelector('.stub-html')).toBeNull();
+  });
+
+  it('falls back to the text/html frame when no chart hook is supplied', () => {
+    const mount = document.createElement('div');
+    const nb = {
+      cells: [
+        {
+          cell_type: 'code',
+          source: [''],
+          outputs: [
+            {
+              output_type: 'display_data',
+              data: {
+                'application/vnd.plotly.v1+json': { data: [] },
+                'text/html': ['<div id="plot"></div>'],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    O.renderNotebook(nb, mount, stubFrame);
+    expect(mount.querySelector('.stub-html').dataset.html).toContain('id="plot"');
+  });
+
   it('sanitizes active content from untrusted notebook markdown', () => {
     const mount = document.createElement('div');
     const nb = {
