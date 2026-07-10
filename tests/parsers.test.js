@@ -443,6 +443,8 @@ describe('spark splat decoders (spz / ksplat / sog)', () => {
       'means_u.webp': [0, 0, 0, 0, 255, 255, 255, 0], // splat0 f=0 -> v=-1; splat1 f=1 -> v=+1
       'scales.webp': [0, 0, 0, 0, 1, 1, 1, 0], // idx into codebook: 0.5 vs 2
       'sh0.webp': [0, 0, 0, 255, 1, 1, 1, 128], // colors via codebook, alpha direct
+      // quats: RGB=128 (~0 for the 3 smallest), A=3 (largest is w) -> identity.
+      'quats.webp': [128, 128, 128, 3, 128, 128, 128, 3],
     };
     const zip = makeZip({
       'meta.json': new TextEncoder().encode(JSON.stringify(meta)),
@@ -458,9 +460,9 @@ describe('spark splat decoders (spz / ksplat / sog)', () => {
     // splat0: f=0 -> v=-1 -> -(e^1 - 1); splat1: f=1 -> v=1 -> e^1 - 1
     expect(s.pos[0]).toBeCloseTo(-(Math.E - 1), 5);
     expect(s.pos[3]).toBeCloseTo(Math.E - 1, 5);
-    expect(s.scale[0]).toBeCloseTo(0.5, 5); // splat0 isotropic
-    expect(s.scale[3]).toBeCloseTo(2, 5); // splat1 isotropic
-    expect(s.quat[3]).toBe(1); // identity (isotropic-preserved)
+    expect(s.scale[0]).toBeCloseTo(0.5, 5); // splat0 per-axis (all 3 index 0 -> 0.5)
+    expect(s.scale[3]).toBeCloseTo(2, 5); // splat1 per-axis (all 3 index 1 -> 2)
+    expect(s.quat[3]).toBeCloseTo(1, 2); // identity from the smallest-three quat
     // sh0 codebook: idx0 -> C0*0+0.5 = 0.5, idx1 -> clamp(C0*1+0.5)
     expect(s.col[0]).toBeCloseTo(0.5, 5);
     expect(s.col[4]).toBeCloseTo(0.28209479177387814 + 0.5, 5);
@@ -514,6 +516,50 @@ describe('spz v4 (zstd stream container)', () => {
     const dv = new DataView(buf.buffer);
     dv.setUint32(16, 60, true); // toc points into garbage
     expect(() => parseSpz(buf.buffer)).toThrow();
+  });
+});
+
+describe('anisotropy is actually decoded (guards against a silent revert to isotropic)', () => {
+  // Each real fixture is a scene of oriented gaussians, so a correct decoder must
+  // yield mostly non-identity rotations and per-axis-varying scales. Round blobs
+  // (identity quat, equal scales) would mean the rotation/scale stream was dropped.
+  const fractions = (s) => {
+    let rotated = 0;
+    let anisoScale = 0;
+    for (let i = 0; i < s.count; i++) {
+      const [x, y, z] = [s.quat[i * 4], s.quat[i * 4 + 1], s.quat[i * 4 + 2]];
+      if (Math.hypot(x, y, z) > 0.02) rotated++;
+      const [a, b, c] = [s.scale[i * 3], s.scale[i * 3 + 1], s.scale[i * 3 + 2]];
+      const mx = Math.max(a, b, c);
+      if (mx > 0 && (mx - Math.min(a, b, c)) / mx > 0.05) anisoScale++;
+    }
+    return { rot: rotated / s.count, aniso: anisoScale / s.count };
+  };
+  const assertOriented = (s, name) => {
+    const f = fractions(s);
+    expect(f.rot, `${name}: fraction with a real rotation`).toBeGreaterThan(0.5);
+    expect(f.aniso, `${name}: fraction with anisotropic scale`).toBeGreaterThan(0.5);
+  };
+
+  it('both .ply and .spz (v1-3, v4) carry rotation and per-axis scale', () => {
+    assertOriented(parsePlySplat(fixture('capybara.ply')), 'compressed .ply');
+    assertOriented(parseSpz(fixture('capybara.spz')), '.spz v1-3');
+    assertOriented(parseSpz(fixture('capybara-v4.spz')), '.spz v4');
+  });
+
+  // capybara.splat and capybara.ksplat were authored with identity rotation (the
+  // .splat bytes are all 128, the .ksplat rotation f16 is [1,0,0,0]); their
+  // decoders still read the stream — verified by the correct identity here — and
+  // handle real rotation for oriented captures. They keep per-axis scale.
+  it('.splat and .ksplat keep per-axis scale (these samples have no rotation)', () => {
+    for (const [s, name] of [
+      [parseSplatBin(fixture('capybara.splat')), '.splat'],
+      [parseKsplat(fixture('capybara.ksplat')), '.ksplat'],
+    ]) {
+      const f = fractions(s);
+      expect(f.aniso, `${name} anisotropic scale`).toBeGreaterThan(0.5);
+      expect(f.rot, `${name} rotation (none in this file)`).toBe(0);
+    }
   });
 });
 
