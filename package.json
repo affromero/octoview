@@ -1,8 +1,8 @@
 {
   "name": "octoview",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
-  "description": "Preview HTML reports, Markdown, and Jupyter notebooks straight from private GitHub repos — a Safari web extension. (3D preview in progress.)",
+  "description": "Preview 3D splats, notebooks, HTML reports, arrays, tables and models inline on GitHub. Safari/Chrome/Firefox extension.",
   "type": "module",
   "license": "MIT",
   "author": "Andres Romero <me@afromero.co>",
