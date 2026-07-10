@@ -15,7 +15,7 @@ const ARRAY_EXTS = ['.npy', '.npz'];
 const TABLE_EXTS = ['.parquet'];
 const MODEL_EXTS = ['.safetensors', '.gguf'];
 const IMAGE_EXTS = ['.exr', '.hdr', '.tif', '.tiff'];
-const SPLAT_EXTS = ['.splat', '.splattie'];
+const SPLAT_EXTS = ['.splat', '.splattie', '.spz', '.ksplat'];
 
 // Cheap header sniff: a 3DGS .ply carries gaussian props; a plain .ply does not.
 // Lets us route .ply to the splat vs the mesh/point-cloud renderer without
@@ -246,15 +246,13 @@ async function splatFrame(buf, ext) {
   function onMsg(e) {
     if (e.source !== f.contentWindow || !e.data) return;
     if (e.data.type === 'ov-splat-ready') {
-      f.contentWindow.postMessage(
-        { type: 'ov-splat', bytes, fileName },
-        new URL(viewerUrl).origin
-      );
+      f.contentWindow.postMessage({ type: 'ov-splat', bytes, fileName }, new URL(viewerUrl).origin);
     } else if (e.data.type === 'ov-splat-ok') {
       settled = true;
       clearTimeout(timer);
       removeEventListener('message', onMsg);
     } else if (e.data.type === 'ov-splat-error') {
+      console.warn('[octoview] Spark path failed, falling back to sprites:', e.data.error);
       fallback();
     }
   }

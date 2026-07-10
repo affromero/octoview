@@ -23,7 +23,12 @@ export default [
   {
     // These are ES modules (lazy-imported by the content script); core.js and
     // content.js stay classic scripts.
-    files: ['extension/render*.js', 'extension/splat-decode.js', 'extension/unzip.js'],
+    files: [
+      'extension/render*.js',
+      'extension/splat-decode.js',
+      'extension/unzip.js',
+      'extension/splat-viewer.js',
+    ],
     languageOptions: { sourceType: 'module' },
   },
   {
