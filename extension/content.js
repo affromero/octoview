@@ -111,7 +111,7 @@ async function render(pane, buf, ext) {
   if (ext === '.html' || ext === '.htm') {
     pane.classList.add('ov-fill');
     pane.style.height = '78vh';
-    pane.appendChild(sandboxFrame(O.decode(buf), 'ov-frame'));
+    pane.appendChild(reportFrame(O.decode(buf)));
   } else if (ext === '.ipynb') {
     pane.classList.add('ov-scroll');
     pane.style.maxHeight = '82vh';
@@ -179,6 +179,36 @@ function plotlyChart(spec) {
     )
     .catch((e) => msg(div, "Couldn't render chart: " + e.message));
   return div;
+}
+
+// Live report path: host the report inside the extension's own viewer page —
+// the one context whose CSP octoview controls. The viewer nests the report in a
+// sandboxed srcdoc frame that inherits the viewer's relaxed CSP, so the report's
+// own scripts EXECUTE, in an opaque origin (no browser.* APIs, no
+// extension-permission fetch, no github cookies — the trust level of today's
+// static frame, plus script execution). The viewer's inline handshake is the
+// capability probe: if Safari refuses 'unsafe-inline' for extension pages, or
+// github's CSP blocks the extension iframe, no ready beacon arrives and the
+// static sandboxFrame swaps in. Verified manually in Safari; the e2e harness can
+// only exercise the fallback (it has no extension origin).
+function reportFrame(html) {
+  const viewerUrl = browser.runtime.getURL('viewer.html');
+  const f = document.createElement('iframe');
+  f.className = 'ov-frame';
+  f.src = viewerUrl;
+  const fallback = setTimeout(swap, 800);
+  function swap() {
+    removeEventListener('message', onReady);
+    f.replaceWith(sandboxFrame(html, 'ov-frame'));
+  }
+  function onReady(e) {
+    if (e.source !== f.contentWindow || !e.data || e.data.type !== 'ov-live-ready') return;
+    clearTimeout(fallback);
+    removeEventListener('message', onReady);
+    e.source.postMessage({ type: 'ov-report', html }, new URL(viewerUrl).origin);
+  }
+  addEventListener('message', onReady);
+  return f;
 }
 
 // A sandboxed frame runs the report/output's scripts in an opaque origin. Under

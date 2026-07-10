@@ -88,5 +88,28 @@
       </svg>
       <figcaption>Validation loss over 12 epochs (static inline SVG).</figcaption>
     </figure>
+
+    <figure>
+      <p id="live-badge" style="font-size: 13px; color: #59636e">
+        report scripts: <b>not executed</b> (static render)
+      </p>
+      <canvas
+        id="live-chart"
+        width="480"
+        height="120"
+        style="background: #f6f8fa; border-radius: 8px"
+      ></canvas>
+      <figcaption>Script-drawn chart — blank means the report's scripts did not run.</figcaption>
+    </figure>
+    <script>
+      document.getElementById('live-badge').innerHTML =
+        'report scripts: <b style="color:#1a7f37">LIVE</b>';
+      const ctx = document.getElementById('live-chart').getContext('2d');
+      ctx.fillStyle = '#2ea043';
+      for (let i = 0; i < 24; i++) {
+        const h = 18 + 90 * Math.abs(Math.sin(i / 3.2));
+        ctx.fillRect(12 + i * 19, 110 - h, 13, h);
+      }
+    </script>
   </body>
 </html>
