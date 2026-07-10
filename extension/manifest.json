@@ -6,7 +6,7 @@
   "content_scripts": [
     {
       "matches": ["https://github.com/*"],
-      "js": ["vendor/marked.min.js", "core.js", "content.js"],
+      "js": ["vendor/marked.min.js", "vendor/highlight.min.js", "core.js", "content.js"],
       "run_at": "document_idle"
     }
   ],

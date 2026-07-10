@@ -338,6 +338,7 @@ function ensureStyle() {
       animation:octoview-pulse 2.4s ease-out infinite}
     #${BTN_ID}:hover{background:#2ea043;animation:none}
     #${BTN_ID}.active{background:#1f6feb;border-color:#388bfd;animation:none}
+    #${BTN_ID}.ov-btn-bar{align-self:center;vertical-align:middle;margin:0 8px 0 0}
     @keyframes octoview-pulse{0%{box-shadow:0 0 0 0 rgba(46,160,67,.5)}
       70%{box-shadow:0 0 0 6px rgba(46,160,67,0)}100%{box-shadow:0 0 0 0 rgba(46,160,67,0)}}
     #${PANE_ID}{border:1px solid #30363d;border-radius:6px;overflow:hidden;background:#0d1117;
@@ -353,6 +354,18 @@ function ensureStyle() {
     #${PANE_ID} .ov-md a{color:#4493f8}
     #${PANE_ID} .ov-code{background:#161b22;border:1px solid #30363d;border-radius:6px;
       padding:12px 14px;overflow-x:auto;font:12.5px/1.5 ui-monospace,monospace;color:#e6edf3;margin:0 0 4px}
+    /* highlight.js github-dark theme, scoped to the notebook code cells. */
+    #${PANE_ID} .hljs-doctag,#${PANE_ID} .hljs-keyword,#${PANE_ID} .hljs-meta .hljs-keyword,#${PANE_ID} .hljs-template-tag,#${PANE_ID} .hljs-template-variable,#${PANE_ID} .hljs-type,#${PANE_ID} .hljs-variable.language_{color:#ff7b72}
+    #${PANE_ID} .hljs-title,#${PANE_ID} .hljs-title.class_,#${PANE_ID} .hljs-title.function_{color:#d2a8ff}
+    #${PANE_ID} .hljs-attr,#${PANE_ID} .hljs-attribute,#${PANE_ID} .hljs-literal,#${PANE_ID} .hljs-meta,#${PANE_ID} .hljs-number,#${PANE_ID} .hljs-operator,#${PANE_ID} .hljs-selector-attr,#${PANE_ID} .hljs-selector-class,#${PANE_ID} .hljs-selector-id,#${PANE_ID} .hljs-variable{color:#79c0ff}
+    #${PANE_ID} .hljs-string,#${PANE_ID} .hljs-regexp,#${PANE_ID} .hljs-meta .hljs-string{color:#a5d6ff}
+    #${PANE_ID} .hljs-built_in,#${PANE_ID} .hljs-symbol{color:#ffa657}
+    #${PANE_ID} .hljs-comment,#${PANE_ID} .hljs-code,#${PANE_ID} .hljs-formula{color:#8b949e}
+    #${PANE_ID} .hljs-name,#${PANE_ID} .hljs-quote,#${PANE_ID} .hljs-selector-tag,#${PANE_ID} .hljs-selector-pseudo{color:#7ee787}
+    #${PANE_ID} .hljs-subst{color:#c9d1d9}
+    #${PANE_ID} .hljs-bullet{color:#f2cc60}
+    #${PANE_ID} .hljs-emphasis{font-style:italic}
+    #${PANE_ID} .hljs-strong{font-weight:bold}
     #${PANE_ID} .ov-nb-text{padding:4px 14px;margin:0 0 10px;overflow-x:auto;
       font:12.5px/1.5 ui-monospace,monospace;white-space:pre-wrap;color:#adbac7}
     #${PANE_ID} .ov-nb-err{color:#ff7b72}
@@ -393,27 +406,28 @@ function addButton() {
   btn.textContent = 'Preview';
   btn.addEventListener('click', () => onPreview(btn));
 
-  // Leftmost item of GitHub's file-view segmented control (Code | Blame, or
-  // Preview | Code | Blame for notebooks), so ours sits left of Code.
+  // GitHub renders the Code | Blame toggle as a Primer SegmentedControl whose
+  // per-segment classes are hashed and change between releases, so we don't try
+  // to become a segment (that mismatch is what looked "off"). Instead we drop the
+  // button in as a plain sibling immediately to the LEFT of the whole control, in
+  // the same flex row — .ov-btn-bar aligns it to the toggle's height.
   const blame = [...document.querySelectorAll('a[href*="/blame/"]')].find((a) =>
     a.href.startsWith('https://github.com/')
   );
-  const seg = blame && (blame.closest('ul, nav, [role="tablist"]') || blame.parentElement);
-  if (seg) {
-    if (seg.tagName === 'UL') {
-      const li = document.createElement('li');
-      li.appendChild(btn);
-      seg.insertBefore(li, seg.firstElementChild);
-    } else {
-      seg.insertBefore(btn, seg.firstElementChild);
-    }
+  const seg = blame && blame.closest('ul, nav, [role="tablist"], [role="list"]');
+  if (seg && seg.parentElement) {
+    btn.classList.add('ov-btn-bar');
+    seg.parentElement.insertBefore(btn, seg);
     return;
   }
+  // Fallback: sit beside the Raw/edit action group on the right of the header.
   const raw = [...document.querySelectorAll('a[href*="/raw/"]')].find((a) =>
     a.href.startsWith('https://github.com/')
   );
-  if (raw && raw.parentElement) raw.parentElement.appendChild(btn);
-  else {
+  if (raw && raw.parentElement) {
+    btn.classList.add('ov-btn-bar');
+    raw.parentElement.insertBefore(btn, raw.parentElement.firstElementChild);
+  } else {
     btn.style.cssText = 'position:fixed;top:70px;right:20px;z-index:99999';
     document.body.appendChild(btn);
   }

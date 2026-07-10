@@ -10,6 +10,24 @@ mkdir -p build
 curl -fsSL https://cdn.jsdelivr.net/npm/marked/marked.min.js \
   -o extension/vendor/marked.min.js
 
+# highlight.js (core + the languages notebook code cells use), an IIFE that sets
+# window.hljs, loaded as a content script alongside marked. Syntax-highlights the
+# notebook code cells like GitHub does.
+cat > build/highlight.entry.mjs <<'JS'
+import hljs from 'highlight.js/lib/core';
+import python from 'highlight.js/lib/languages/python';
+import javascript from 'highlight.js/lib/languages/javascript';
+import json from 'highlight.js/lib/languages/json';
+import bash from 'highlight.js/lib/languages/bash';
+hljs.registerLanguage('python', python);
+hljs.registerLanguage('javascript', javascript);
+hljs.registerLanguage('json', json);
+hljs.registerLanguage('bash', bash);
+window.hljs = hljs;
+JS
+npx esbuild build/highlight.entry.mjs --bundle --format=iife --minify \
+  --outfile=extension/vendor/highlight.min.js
+
 # three.js + loaders (mesh/point-cloud/EXR/HDR/TIFF) as an ES module, lazy-imported
 # by render3d.js / render-image.js / render-splat.js.
 cat > build/three3d.entry.mjs <<'JS'

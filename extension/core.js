@@ -114,9 +114,36 @@
     wrap.appendChild(pre);
   }
 
+  // The notebook's kernel language (python for most ML notebooks), so code cells
+  // highlight against the right grammar. hljs falls back to auto-detect if we
+  // don't recognize it.
+  function notebookLang(nb) {
+    const m = nb.metadata || {};
+    return (
+      (m.language_info && m.language_info.name) || (m.kernelspec && m.kernelspec.language) || ''
+    );
+  }
+
+  // Syntax-highlight a code cell like GitHub does, but keep it optional: hljs is
+  // absent in the jsdom unit tests, so fall back to plain text there.
+  function highlightInto(pre, src, lang) {
+    if (!g.hljs) {
+      pre.textContent = src;
+      return;
+    }
+    try {
+      pre.innerHTML = g.hljs.getLanguage(lang)
+        ? g.hljs.highlight(src, { language: lang, ignoreIllegals: true }).value
+        : g.hljs.highlightAuto(src).value;
+    } catch {
+      pre.textContent = src;
+    }
+  }
+
   function renderNotebook(nb, mount, htmlFrame, chart) {
     const wrap = document.createElement('div');
     wrap.className = 'ov-nb';
+    const lang = notebookLang(nb);
     for (const cell of nb.cells || []) {
       const src = joinLines(cell.source);
       if (cell.cell_type === 'markdown') {
@@ -127,8 +154,8 @@
         wrap.appendChild(d);
       } else if (cell.cell_type === 'code') {
         const pre = document.createElement('pre');
-        pre.className = 'ov-code';
-        pre.textContent = src;
+        pre.className = 'ov-code hljs';
+        highlightInto(pre, src, lang);
         wrap.appendChild(pre);
         for (const out of cell.outputs || []) renderOutput(out, wrap, htmlFrame, chart);
       }
