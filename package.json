@@ -24,7 +24,7 @@
   },
   "lint-staged": {
     "*.{js,mjs}": [
-      "eslint --fix --max-warnings 0",
+      "eslint --fix --max-warnings 0 --no-warn-ignored",
       "prettier --write"
     ],
     "*.{json,md,yml,yaml}": [
@@ -39,6 +39,7 @@
     "esbuild": "^0.28.1",
     "eslint": "^10.6.0",
     "fflate": "^0.8.3",
+    "fzstd": "^0.1.1",
     "globals": "^17.7.0",
     "highlight.js": "^11.11.1",
     "hyparquet": "^1.26.2",

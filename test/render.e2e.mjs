@@ -126,6 +126,11 @@ const CASES = [
     ok: (r) => r.mainCanvas && /splats/.test(r.text),
   },
   {
+    name: 'capybara-v4.spz',
+    sample: 'samples/capybara-v4.spz',
+    ok: (r) => r.mainCanvas && /splats/.test(r.text),
+  },
+  {
     name: 'capybara.ksplat',
     sample: 'samples/capybara.ksplat',
     ok: (r) => r.mainCanvas && /splats/.test(r.text),
