@@ -129,11 +129,22 @@ connect-src 'none'; object-src 'none'`). Chrome additionally makes `viewer.html`
 
 - Renderer contract everywhere: `{ count, pos, col, scale, quat }`. The renderer
   draws TRUE anisotropic gaussians (oriented covariance ellipses) from the scale +
-  quaternion. Spherical harmonics are still dropped (base color only). `.splat`
-  and both `.ply` variants are fully anisotropic; `.spz`/`.ksplat`/`.sog`/`.lcc`
-  currently emit identity rotation (isotropic look) pending a per-format rotation
-  cross-check — decode their rotation streams and drop the `ponytail:` note when
-  verified against the sample render.
+  quaternion. Spherical harmonics are still dropped (base color only). ALL formats
+  decode full anisotropy (per-axis scale + rotation):
+  - The PlayCanvas "smallest three" quaternion (uint32: 2-bit largest index +
+    3×10-bit) is shared by compressed `.ply` (`packed_rotation`) and `.spz`
+    (4-byte rotation stream — v1-3 after scales, v4 stream index 4). `unpackQuat`
+    is the one decoder for it.
+  - `.sog` packs the same smallest-three 8-bit in the `quats.webp` (RGB = the
+    three components, A = largest index); scales are per-axis codebook indices.
+  - `.ksplat` stores a `w,x,y,z` quaternion (4×f32 at level 0, 4×f16 at level 1/2).
+  - Two committed samples carry identity rotation (`capybara.splat` bytes are all
+    128, `capybara.ksplat` rotation f16 is `[1,0,0,0]`) — the decoders read the
+    stream regardless and the tests assert the identity, so oriented captures of
+    those formats still work.
+  - `.lcc` exposes NO rotation attribute in its metadata (only `scale`), and the
+    sample's trailing record bytes are zero, so it decodes per-axis scale with
+    identity rotation. Add rotation if a real oriented LCC capture surfaces.
 - Splats: `.splat`, 3DGS + compressed `.ply`, `.spz` (v1-4, hand-written from
   nianticlabs/spz — Spark's own reader can't open v4), `.ksplat` (mkkellogg;
   scales are LINEAR, no exp), `.sog` v2 (zip of webp textures, codebook

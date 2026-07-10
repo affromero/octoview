@@ -78,6 +78,7 @@ describe('parser DoS hardening', () => {
       means: { mins: [0, 0, 0], maxs: [1, 1, 1], files: ['means_l.webp', 'means_u.webp'] },
       scales: { codebook: [0], files: ['scales.webp'] },
       sh0: { codebook: [0], files: ['sh0.webp'] },
+      quats: { files: ['quats.webp'] },
     };
     const one = new Uint8Array(4); // one RGBA texel
     const zip = zipSync({
@@ -86,6 +87,7 @@ describe('parser DoS hardening', () => {
       'means_u.webp': one,
       'scales.webp': one,
       'sh0.webp': one,
+      'quats.webp': one,
     });
     const decodeImage = async (bytes) => ({
       data: new Uint8ClampedArray(bytes),
