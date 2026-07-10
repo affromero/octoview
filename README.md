@@ -52,7 +52,7 @@ created or consumes them. A repository gives those files an immutable commit, re
 release tags, and a shared place for collaborators to fetch the same artifact.
 
 That does not make GitHub a streaming CDN or an archive for enormous captures. Keep large or
-frequently replaced scenes in object storage, releases, or an asset pipeline—and commit a stable
+frequently replaced scenes in object storage, releases, or an asset pipeline, and commit a stable
 reference, preview image, or reduced sample instead. octoview is for the useful middle ground:
 opening a real, reasonably sized asset directly from the private repository where its context lives.
 
@@ -95,10 +95,10 @@ Open any file below on GitHub and click **Preview** (after [installing](#develop
 - **Reports and notebooks:** [report.html](samples/report.html) · [notebook.ipynb](samples/notebook.ipynb)
 
 <details>
-<summary><b>Screenshots</b> — what Preview looks like (click to expand)</summary>
+<summary><b>Screenshots</b>: what Preview looks like (click to expand)</summary>
 <br>
 
-_HTML report JavaScript is live in the sandbox — the report’s dynamic **LIVE** badge and chart are running:_
+_HTML report JavaScript is live in the sandbox. Its dynamic **LIVE** badge and chart are running:_
 
 ![Live HTML report](assets/screenshots/report.png)
 
@@ -130,7 +130,7 @@ the rendered file; clicking it again swaps back.
 - **Private-repo access.** The content script runs on `github.com`, so it has your cookies. It
   resolves the file's tokenized `raw.githubusercontent.com` URL and fetches the bytes. When that
   response is a Git LFS pointer, octoview follows GitHub's page-provided LFS download URL instead.
-  GitHub-hosted LFS files work for private repos with the existing browser session — no PAT or OAuth.
+  GitHub-hosted LFS files work for private repos with the existing browser session. No PAT or OAuth.
   External LFS remotes are intentionally out of scope.
 - **Rendering under GitHub's CSP.** A content script runs in an isolated world that github's CSP does
   not bind, so octoview's own renderers (three.js on a `<canvas>`, DOM tables, notebook cells) run
@@ -156,7 +156,7 @@ The dispatch, URL resolution, and notebook rendering live in
 flowchart TD
     subgraph blob["github.com blob page (content-script isolated world)"]
         content["Preview button · cookie fetch<br/>LFS download fallback<br/>(content.js)"]
-        core["dispatch by extension · raw/LFS-URL resolve · notebook render<br/>(core.js, pure — unit-tested)"]
+        core["dispatch by extension · raw/LFS-URL resolve · notebook render<br/>(core.js, pure, unit-tested)"]
         subgraph renderers["Lazy-imported renderers"]
             r3d["render3d.js<br/>mesh · point cloud"]
             rsplat["render-splat.js<br/>main-thread splats"]
@@ -218,20 +218,9 @@ previews additionally subsample to 800,000 splats and release their WebGL contex
 
 ## Related work
 
-octoview is a browser extension, so the closest comparison is other GitHub extensions. Nearly all of them enhance navigation or polish the UI. **None render the file's contents**, let alone ML and data formats. octoview is the one that turns a blob page into a live preview of the file itself.
+octoview is a browser extension, so the closest comparison is other GitHub extensions. The popular ones ([Refined GitHub](https://github.com/refined-github/refined-github), [Octotree](https://www.octotree.io/), [OctoLinker](https://github.com/OctoLinker/OctoLinker), [Sourcegraph](https://sourcegraph.com/docs/integration/browser-extension)) enhance navigation or polish the UI. **None render the file's contents.**
 
-| Extension                                                                 | What it adds                                                                                       | Renders file contents | Safari | Chrome | Firefox |
-| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | :-------------------: | :----: | :----: | :-----: |
-| **octoview** (this repo)                                                  | Inline **Preview** of the file: reports, notebooks, 3D, splats, arrays, tables, model headers, HDR |     ✅ 24 formats     |   ✅   |   ✅   |   🚧    |
-| [Refined GitHub](https://github.com/refined-github/refined-github)        | Hundreds of UI and workflow refinements                                                            |          ❌           |   ✅   |   ✅   |   ✅    |
-| [Octotree](https://www.octotree.io/)                                      | Collapsible file-tree sidebar                                                                      |          ❌           |  Pro   |   ✅   |   ✅    |
-| [Gitako](https://github.com/EnixCoda/Gitako)                              | File-tree sidebar and fuzzy file search                                                            |          ❌           |   ❌   |   ✅   |   ✅    |
-| [OctoLinker](https://github.com/OctoLinker/OctoLinker)                    | Makes `import`/`require` paths clickable                                                           |          ❌           |   ✅   |   ✅   |   ✅    |
-| [Enhanced GitHub](https://github.com/softvar/enhanced-github)             | Repo and folder size, single-file download                                                         |          ❌           |   ❌   |   ✅   |   ✅    |
-| [Sourcegraph](https://sourcegraph.com/docs/integration/browser-extension) | Code-intelligence hovers (go-to-def, references)                                                   |      source only      |   ✅   |   ✅   |   ✅    |
-| [GitHub File Icons](https://github.com/homerchen19/github-file-icons)     | File-type icons in listings                                                                        |          ❌           |   ✅   |   ✅   |   ✅    |
-
-The few extensions that DO render a file's contents are single-purpose and Chrome-only: a [Mermaid diagram renderer](https://chromewebstore.google.com/detail/mermaid-diagram-renderer/ahhjfofclhjllmiglebianajpmkabcbc) (largely superseded by GitHub's native Mermaid support), [three-hub](https://github.com/danielribeiro/three-hub) for 3D models, and an [ipynb viewer](https://chromewebstore.google.com/detail/ipynb-files-viewer/iohfdefnnffaejpacklikjbjhnfcmbej) for notebooks. None span the range octoview covers, and none ship on Safari.
+The genuinely comparable tools are a handful of single-purpose renderers, all narrow and Chrome-only: a [Mermaid diagram renderer](https://chromewebstore.google.com/detail/mermaid-diagram-renderer/ahhjfofclhjllmiglebianajpmkabcbc) (largely superseded by GitHub's native Mermaid support), [three-hub](https://github.com/danielribeiro/three-hub) for 3D models, and an [ipynb viewer](https://chromewebstore.google.com/detail/ipynb-files-viewer/iohfdefnnffaejpacklikjbjhnfcmbej) for notebooks. None span the range octoview covers, and none ship on Safari.
 
 The Firefox build (`npm run build:firefox`) is a valid, `addons-linter`-clean MV3 package, but stays 🚧 until it's listed on AMO: Gecko has no sandbox-page mechanism, so live HTML reports fall back to the static frame there (same graceful path as Safari's probe fallback), and Spark's worker cannot run, so splats always use the main-thread renderer.
 
@@ -241,7 +230,7 @@ It comes up, so here is the reasoning:
 
 - **Different category of change.** Refined GitHub ships hundreds of small UI and workflow refinements and [explicitly scopes out](https://github.com/refined-github/refined-github/blob/main/contributing.md) niche features; a rendering engine for ML file formats is not a refinement, it's a product. The same applies to the file-tree and linking extensions.
 - **Payload.** octoview vendors ~13 MB of renderers (three.js, Plotly, Spark, hyparquet). Merging that into a lightweight extension would tax every user of the host extension for a feature most would never trigger.
-- **Permission and CSP surface.** Rendering live reports and WASM-backed viewers requires extension viewer pages with a carefully relaxed CSP (or Chrome sandbox pages) — a security surface a UI-refinement extension has no reason to carry.
+- **Permission and CSP surface.** Rendering live reports and WASM-backed viewers requires extension viewer pages with a carefully relaxed CSP (or Chrome sandbox pages), a security surface a UI-refinement extension has no reason to carry.
 - **They compose.** Extensions are not exclusive: run Refined GitHub for the workflow polish and octoview for the file rendering. That composition is the extension model working as intended, not a gap to merge away.
 
 ## Roadmap
@@ -306,6 +295,17 @@ test/render.e2e.mjs    Chromium and WebKit render check under a github-like CSP
 ```
 
 Each `render-*.js` is an ES module, lazy-imported by `content.js` only when its file type is opened.
+
+## More from me
+
+If octoview is useful, you might like these too:
+
+- [**splattie**](https://github.com/affromero/splattie): generate rigged, interactive 3D Gaussian assets for the web (the `.splattie` format octoview previews).
+- [**gitpane**](https://github.com/affromero/gitpane): a multi-repo Git workspace dashboard for the terminal.
+- [**flight-finder**](https://github.com/affromero/flight-finder): a self-hosted, bring-your-own-LLM flight price tracker.
+- [**kin3o**](https://github.com/affromero/kin3o): an AI-powered Lottie animation generator CLI.
+- [**klogr**](https://github.com/affromero/klogr): a batteries-included structured logger for Python data/ML projects, built on Rich.
+- [**pixelcache**](https://github.com/affromero/pixelcache): a versatile Python image-processing library with built-in caching over Pillow, NumPy, and PyTorch.
 
 ## License
 
