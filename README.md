@@ -23,14 +23,16 @@ _Gaussian splats, meshes, point clouds, depth and EXR, HTML reports, notebooks, 
 ## Why
 
 ML and data work lives in files GitHub renders as **raw source or not at all**: self-contained HTML
-reports (Plotly, `ydata-profiling`, W&B exports), notebooks whose interactive plots get stripped,
-Gaussian splat captures, meshes and point clouds, model graphs, Parquet, `.npy` arrays, EXR and
-depth images.
+reports ([Plotly](https://plotly.com/python/),
+[`ydata-profiling`](https://github.com/ydataai/ydata-profiling),
+[W&B](https://wandb.ai/) exports), notebooks whose interactive plots get stripped, Gaussian splat
+captures, meshes and point clouds, model graphs, Parquet, `.npy` arrays, EXR and depth images.
 
-The usual fixes (`htmlpreview`, `nbviewer`, `raw.githack`) **can't reach private repos** because they
-can't authenticate as you. octoview can. It is a Safari extension, so it rides your existing GitHub
-session: it adds a **Preview** button on any `blob` page, fetches the file with your cookies, and
-renders it in place. No service, no upload, no personal access token.
+The usual fixes ([`htmlpreview`](https://htmlpreview.github.io/),
+[`nbviewer`](https://nbviewer.org/), [`raw.githack`](https://raw.githack.com/)) **can't reach private
+repos** because they can't authenticate as you. octoview can. It is a Safari extension, so it rides
+your existing GitHub session: it adds a **Preview** button on any `blob` page, fetches the file with
+your cookies, and renders it in place. No service, no upload, no personal access token.
 
 ## What it previews
 
