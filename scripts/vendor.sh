@@ -6,9 +6,17 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p build
 
-# marked: markdown -> HTML (used by the notebook renderer, loaded as a content script)
-curl -fsSL https://cdn.jsdelivr.net/npm/marked/marked.min.js \
-  -o extension/vendor/marked.min.js
+# marked: markdown -> HTML (notebook renderer, loaded as a content script setting
+# window.marked). Bundled from the pinned npm devDep — NOT curl'd from a floating
+# CDN — so the version is lockfile-reproducible and a CDN/npm-latest compromise
+# can't silently inject code into every github.com page. Its output is sanitized
+# in core.js before it reaches the DOM.
+cat > build/marked.entry.mjs <<'JS'
+import { marked } from 'marked';
+window.marked = marked;
+JS
+npx esbuild build/marked.entry.mjs --bundle --format=iife --minify \
+  --outfile=extension/vendor/marked.min.js
 
 # highlight.js (core + the languages notebook code cells use), an IIFE that sets
 # window.hljs, loaded as a content script alongside marked. Syntax-highlights the
@@ -95,7 +103,7 @@ npx esbuild build/spark.entry.mjs --bundle --format=esm --minify \
 # ponytail: decoders are hand-written in splat-decode.js — reusing Spark's was
 # tried and rejected: its bundle doesn't tree-shake (5MB for SpzReader alone).
 cat > build/fflate.entry.mjs <<'JS'
-export { unzipSync, gunzipSync } from 'fflate';
+export { unzipSync, gunzipSync, Gunzip } from 'fflate';
 export { decompress as zstdDecompress } from 'fzstd';
 JS
 npx esbuild build/fflate.entry.mjs --bundle --format=esm --minify \

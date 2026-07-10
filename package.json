@@ -46,6 +46,7 @@
     "hyparquet": "^1.26.2",
     "jsdom": "^29.1.1",
     "lint-staged": "^17.0.8",
+    "marked": "^15.0.12",
     "playwright": "^1.61.1",
     "plotly.js-cartesian-dist-min": "^3.6.0",
     "prettier": "^3.9.4",
