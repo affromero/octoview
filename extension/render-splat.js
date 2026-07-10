@@ -231,6 +231,7 @@ function view(splat, mount) {
   sort();
 
   const gizmo = new ViewHelper(camera, renderer.domElement);
+  gizmo.setLabels('X', 'Y', 'Z');
   let gizmoOn = true;
   buildPanel(
     mount,

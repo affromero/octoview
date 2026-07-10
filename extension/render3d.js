@@ -113,6 +113,7 @@ export function render3D(buf, mount, ext) {
     }
 
     const viewHelper = new ViewHelper(camera, renderer.domElement);
+    viewHelper.setLabels('X', 'Y', 'Z');
     renderer.domElement.addEventListener('pointerup', (e) => {
       if (gizmoOn) viewHelper.handleClick(e);
     });
