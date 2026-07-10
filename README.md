@@ -13,8 +13,13 @@ _Gaussian splats, meshes, point clouds, depth and EXR, HTML reports, notebooks, 
 [![Tests](https://img.shields.io/badge/tests-unit_%2B_webkit_e2e-brightgreen)](test/render.e2e.mjs)
 [![Safari](https://img.shields.io/badge/Safari-Web_Extension-006CFF?logo=safari&logoColor=white)](https://developer.apple.com/documentation/safariservices/safari_web_extensions)
 [![Manifest v3](https://img.shields.io/badge/manifest-v3-8250df)](extension/manifest.json)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/affromero/octoview/pulls)
+[![code style: prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg)](https://prettier.io)
+[![Platform](https://img.shields.io/badge/platform-macOS-000000?logo=apple&logoColor=white)](#develop)
+[![Three.js](https://img.shields.io/badge/three.js-r185-black?logo=threedotjs&logoColor=white)](https://threejs.org)
+[![Formats](https://img.shields.io/badge/formats-19-orange)](#what-it-previews)
 
-[Why](#why) · [What it previews](#what-it-previews) · [Try it](#try-it-from-this-repo) · [How it works](#how-it-works) · [Develop](#develop)
+[Why](#why) · [What it previews](#what-it-previews) · [Try it](#try-it-from-this-repo) · [How it works](#how-it-works) · [Related work](#related-work) · [Develop](#develop)
 
 </div>
 
@@ -100,6 +105,31 @@ the rendered file; clicking it again swaps back.
 
 The dispatch, URL resolution, and notebook rendering live in
 [`extension/core.js`](extension/core.js), kept free of browser APIs so they run under Vitest.
+
+## Related work
+
+Plenty of tools render one of octoview's formats. What sets octoview apart is doing it on four axes at once: it reaches **private** repos (by riding your logged-in GitHub session, no PAT and no OAuth), renders **in place** on the blob page with no hosted service and nothing uploaded, and covers a **broad** range of ML and data formats through a single tool. Most alternatives pick one axis. They are single-format, public-only, or they bounce you to a separate site.
+
+| Tool                         | Previews                                                                               |    Private repos     | In place (no service) |  ML/data breadth  | Notes                                                                                                 |
+| ---------------------------- | -------------------------------------------------------------------------------------- | :------------------: | :-------------------: | :---------------: | ----------------------------------------------------------------------------------------------------- |
+| **octoview**                 | HTML reports, notebooks, 3D + splats, npy/npz, Parquet, safetensors/GGUF, EXR/HDR/TIFF |          ✅          |          ✅           |   ✅ 19 formats   | Rides your GitHub session, no upload or PAT. Reports render static on WebKit.                         |
+| GitHub native blob viewer    | Markdown, images, source, notebooks (static), CSV/TSV, GeoJSON, STL                    |          ✅          |          ✅           |     ⚠️ narrow     | The baseline octoview extends. HTML and most ML/data binaries fall through to raw bytes.              |
+| github.dev (VS Code for Web) | Source, notebooks (stored outputs)                                                     |          ✅          |    ❌ separate tab    | ⚠️ notebooks only | The `.` shortcut honors your session, but no kernel and no 3D, array, tensor, or EXR support.         |
+| nbviewer                     | Notebooks (saved outputs)                                                              |          ❌          |          ❌           | ❌ notebook only  | Paste a URL, public repos only, renders on nbviewer.org.                                              |
+| Google Colab                 | Notebooks (executable)                                                                 | ⚠️ after authorizing |          ❌           | ❌ notebook only  | Real compute backend in a new tab, needs a separate GitHub authorization inside Colab.                |
+| htmlpreview.github.io        | Single raw HTML file                                                                   |          ❌          |          ❌           |        ❌         | No auth, so no private repos. Opens on its own domain, HTML only.                                     |
+| SuperSplat (PlayCanvas)      | Gaussian splats (.ply, .splat, SOG), full editor                                       |          ❌          |          ❌           |  ⚠️ splats only   | Client-side with no upload, but a separate app you load files into by hand.                           |
+| Netron                       | Model graphs (ONNX, TF, PyTorch, safetensors, …)                                       |  ⚠️ download first   |          ❌           |  ⚠️ graphs only   | Hosted or desktop app, no GitHub session. Its deep graph view is richer than octoview's tensor table. |
+| hyperparam.app (hyparquet)   | Parquet tables                                                                         |          ❌          |          ❌           |  ❌ Parquet only  | Client-side parse, no upload, but a separate site with no access to your session.                     |
+| Refined GitHub               | None (UI/UX polish only)                                                               |          ✅          |          ✅           |        ❌         | Rides the session like octoview, but never renders file contents.                                     |
+
+The landscape is wider than one table. For HTML there are CDN rewriters like [`raw.githack`](https://raw.githack.com/) and [jsDelivr](https://www.jsdelivr.com/); for notebooks, cloud workspaces like [Deepnote](https://deepnote.com/) and [Kaggle](https://www.kaggle.com/); for splats and meshes, viewers like [antimatter15](https://antimatter15.com/splat/), [Spark](https://sparkjs.dev/), and [gltf-viewer](https://gltf-viewer.donmccurdy.com/); for model graphs, [Model Explorer](https://github.com/google-ai-edge/model-explorer) and [TensorBoard](https://www.tensorflow.org/tensorboard); for tables, [Tad](https://www.tadviewer.com/), [VisiData](https://www.visidata.org/), and the [DuckDB-Wasm shell](https://shell.duckdb.org/). Each is excellent at its slice, and several run fully client-side. What none of them do is render that slice inline on a private blob page with zero setup, which is the gap octoview fills. On the extension side, [Octotree](https://www.octotree.io/), [Enhanced GitHub](https://github.com/), and [Sourcegraph](https://sourcegraph.com/) also ride your session, but for navigation and code intelligence rather than data-file rendering.
+
+## Roadmap
+
+- **Chrome and Firefox ports.** The MV3 content-script model is portable, so the core dispatch and renderers should move with little change. Several Safari-specific constraints also relax off WebKit: Chromium and Gecko allow a main-thread `blob:` fetch from a worker and honor sandboxed pages, so a report's own inline scripts could actually run there. Interactive plots that render static in Safari would render live in those ports.
+- **More splat and graph coverage.** Promote the in-progress decoders (`.spz`, `.ksplat`, `.sog`) from experimental to verified, and add real model-graph rendering (ONNX via a Netron-style view) beyond today's tensor and metadata table.
+- **Other browsers and new formats: PRs welcome.** The renderer interface is a single extension-keyed dispatch, so adding a format is mostly one self-contained module plus a WebKit render test. Contributions are the fastest path to wider coverage.
 
 ## Develop
 
