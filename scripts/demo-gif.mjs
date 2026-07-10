@@ -1,5 +1,5 @@
 // Record the real extension in action (load a GitHub blob page for a Gaussian
-// splat, click Preview, orbit the render, play the opacity slider) and turn it
+// splat, click Preview, orbit, then collapse to means with the Variance slider) and turn it
 // into assets/demo.gif. Uses the built Chrome extension in a route-intercepted
 // (hermetic) Chromium. Frames are captured with page.screenshot() rather than
 // recordVideo, which drops WebGL canvas content unreliably.
@@ -83,7 +83,7 @@ const hold = async (n) => {
 
 await page.goto(`https://github.com/affromero/octoview/blob/main/samples/${SAMPLE}`);
 await page.locator('#octoview-btn').waitFor({ timeout: 10000 });
-await hold(10); // raw code view
+await hold(7); // raw code view
 await page.locator('#octoview-btn').click();
 await page
   .locator('#octoview-pane canvas')
@@ -111,6 +111,18 @@ if (box) {
 }
 await hold(4);
 
+// Zoom the camera in (OrbitControls dolly) so the render fills the pane — the
+// Variance collapse is a fine per-splat stipple, invisible when the capybara is
+// small in-frame and the GIF palette smooths it.
+if (box) {
+  await page.mouse.move(box.x + box.width * 0.46, box.y + box.height * 0.5);
+  for (let i = 0; i < 5; i++) {
+    await page.mouse.wheel(0, -200);
+    await snap();
+  }
+  await hold(3);
+}
+
 // Play with the Variance slider: collapse the oriented gaussians down to their
 // full-intensity means (revealing the raw point cloud) and back to a solid
 // surface — the most legible of the controls, and unmistakably different.
@@ -123,17 +135,17 @@ const setVariance = (v) =>
     el.dispatchEvent(new Event('input', { bubbles: true }));
   }, v);
 if (await variance.count()) {
-  for (let v = 1; v >= 0; v -= 0.05) {
+  for (let v = 1; v >= 0; v -= 0.08) {
     await setVariance(v);
     await snap();
   }
   await hold(6);
-  for (let v = 0; v <= 1; v += 0.05) {
+  for (let v = 0; v <= 1; v += 0.08) {
     await setVariance(v);
     await snap();
   }
 }
-await hold(6);
+await hold(4);
 await ctx.close();
 
 const out = join(ROOT, 'assets', 'demo.gif');
@@ -145,11 +157,11 @@ execFileSync(
     String(FPS),
     '-i',
     join(frames, '%04d.png'),
-    // A touch more resolution + colors than the default so the collapsed-means
-    // (Variance) frames keep their stipple instead of smearing to a smooth
-    // surface. Global palette (no per-frame) to stay well under the 1 MB budget.
+    // The zoom (above) makes the render big enough that 640px/64-color keeps the
+    // collapsed-means stipple legible; the stipple is high-frequency, so a bigger
+    // frame or palette would blow past the 1 MB budget.
     '-vf',
-    'scale=720:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=96[p];[s1][p]paletteuse=dither=bayer:bayer_scale=4',
+    'scale=640:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=64[p];[s1][p]paletteuse=dither=bayer:bayer_scale=4',
     '-loop',
     '0',
     out,
