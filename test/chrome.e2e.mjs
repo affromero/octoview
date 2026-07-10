@@ -61,29 +61,15 @@ const CASES = [
   },
   {
     file: 'capybara.splat',
-    // Spark viewer canvas (in the extension iframe) or the main-thread
-    // fallback canvas (in the pane) — either proves the splat path survives.
-    // The fallback also exposes the coordinate selector whenever it exposes Axes.
+    // The native WebGL2 splat renderer draws its canvas straight into the pane
+    // (no iframe, no Spark) and exposes the coordinate selector in its panel.
     check: async (page) => {
       const canvas = page.locator('#octoview-pane canvas').first();
-      if (await canvas.isVisible().catch(() => false)) {
-        const coords = page.locator('#octoview-pane .ov3d-panel select').first();
-        if (!(await coords.isVisible().catch(() => false))) return false;
-        await coords.selectOption({ label: 'Z-up (Blender, ROS, CAD)' });
-        return (await coords.inputValue()) === 'Z-up (Blender, ROS, CAD)';
-      }
-      for (const frame of page.frames()) {
-        if (!frame.url().includes('splat-viewer.html')) continue;
-        if (
-          await frame
-            .locator('canvas')
-            .first()
-            .isVisible()
-            .catch(() => false)
-        )
-          return true;
-      }
-      return false;
+      if (!(await canvas.isVisible().catch(() => false))) return false;
+      const coords = page.locator('#octoview-pane .ov3d-panel select').first();
+      if (!(await coords.isVisible().catch(() => false))) return false;
+      await coords.selectOption({ label: 'Z-up (Blender, ROS, CAD)' });
+      return (await coords.inputValue()) === 'Z-up (Blender, ROS, CAD)';
     },
   },
   {

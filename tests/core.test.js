@@ -37,7 +37,6 @@ describe('shouldShow', () => {
     expect(O.shouldShow('/o/r/blob/main/emb.npy', 'emb.npy')).toBe(true);
     expect(O.shouldShow('/o/r/blob/main/data.parquet', 'data.parquet')).toBe(true);
     expect(O.shouldShow('/o/r/blob/main/meta.lcc', 'meta.lcc')).toBe(true);
-    expect(O.shouldShow('/o/r/blob/main/scene.rad', 'scene.rad')).toBe(true);
   });
   it('hides for unsupported files and non-blob pages', () => {
     expect(O.shouldShow('/o/r/blob/main/train.py', 'train.py')).toBe(false);

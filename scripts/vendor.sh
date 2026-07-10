@@ -84,24 +84,9 @@ JS
 npx esbuild build/plotly.entry.mjs --bundle --format=esm --minify \
   --outfile=extension/vendor/plotly.esm.js
 
-# Spark (@sparkjsdev/spark): full Gaussian-splat renderer. three is a peer dep so
-# esbuild dedupes it to one copy; the worker (inline blob) and WASM (inline
-# base64) come from the prebuilt dist. Runs in the splat-viewer extension page,
-# whose CSP allows workers + WASM. Lazy-loaded there only for splats.
-cat > build/spark.entry.mjs <<'JS'
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
-export { THREE, OrbitControls, SparkRenderer, SplatMesh };
-JS
-npx esbuild build/spark.entry.mjs --bundle --format=esm --minify \
-  --outfile=extension/vendor/spark.esm.js
-
-# fflate + fzstd: pure-JS zip/gzip/zstd. unzipSync feeds unzip.js
-# (.npz/.splattie/.sog bundles); gunzipSync feeds the .spz v1-3 decoder (gzip
-# wrapper); zstdDecompress feeds the .spz v4 decoder (per-attribute frames).
-# ponytail: decoders are hand-written in splat-decode.js — reusing Spark's was
-# tried and rejected: its bundle doesn't tree-shake (5MB for SpzReader alone).
+# fflate + fzstd: pure-JS zip/gzip/zstd. unzipSync feeds unzip.js (.npz/.sog
+# bundles); gunzipSync feeds the .spz v1-3 decoder (gzip wrapper); zstdDecompress
+# feeds the .spz v4 decoder (per-attribute frames).
 cat > build/fflate.entry.mjs <<'JS'
 export { unzipSync, gunzipSync, Gunzip } from 'fflate';
 export { decompress as zstdDecompress } from 'fzstd';
@@ -109,14 +94,4 @@ JS
 npx esbuild build/fflate.entry.mjs --bundle --format=esm --minify \
   --outfile=extension/vendor/fflate.esm.js
 
-# splattie-widget (@afromero/splattie-widget): the rigged/interactive splat format
-# (LBS skinning + cursor-following state machine on top of Spark). Bundled
-# self-contained (Spark + jszip inlined) and auto-registers <splattie-widget>.
-# Runs in the splattie-viewer extension page; lazy-loaded there only for .splattie.
-cat > build/splattie.entry.mjs <<'JS'
-import '@afromero/splattie-widget';
-JS
-npx esbuild build/splattie.entry.mjs --bundle --format=esm --minify \
-  --outfile=extension/vendor/splattie-widget.esm.js
-
-echo "vendored: marked, three3d, hyparquet, plotly, spark, splattie-widget"
+echo "vendored: marked, three3d, hyparquet, plotly, fflate"

@@ -1,12 +1,15 @@
 // Pure Gaussian-splat decoders (no three.js, no DOM) so they can be unit-tested
 // and reused. Each returns { count, pos:Float32[3n], col:Float32[4n] rgba [0,1],
-// size:Float32[n] }. Handles the antimatter15 .splat, the standard float 3DGS
-// .ply, the PlayCanvas/SuperSplat COMPRESSED .ply (chunk + packed_* uints, what
-// splat-transform emits), and the .splattie bundle.
-import { unzip, toBuffer } from './unzip.js';
+// scale:Float32[3n] (linear world-space std dev), quat:Float32[4n] (xyzw,
+// normalized) }. render-splat.js builds each splat's covariance R S^2 R^T from
+// scale+quat and draws the oriented gaussian. Handles the antimatter15 .splat,
+// the standard float 3DGS .ply, and the PlayCanvas/SuperSplat COMPRESSED .ply
+// (chunk + packed_* uints, what splat-transform emits).
+import { unzip } from './unzip.js';
 import { zstdDecompress, Gunzip } from './vendor/fflate.esm.js';
 
 const C0 = 0.28209479177387814; // SH band-0 factor, f_dc -> base color
+const SQRT2 = Math.SQRT2; // smallest-three quaternion component scale
 const MAX_SPLATS = 800000; // ponytail: subsample beyond this to keep the sort snappy
 // Untrusted .spz files decompress on the main thread; cap the inflated size so a
 // gzip/zstd bomb (a tiny file expanding to gigabytes) cannot OOM the tab. 256MiB
@@ -115,7 +118,8 @@ export function isPlySplat(buf) {
   return (has('f_dc_0') && has('scale_0') && has('rot_0')) || has('packed_position');
 }
 
-// antimatter15 .splat: 32 bytes/splat — pos(3 f32), scale(3 f32), rgba(4 u8), quat(4 u8).
+// antimatter15 .splat: 32 bytes/splat — pos(3 f32), scale(3 f32, LINEAR), rgba(4
+// u8), quat(4 u8, stored w,x,y,z as (byte-128)/128).
 export function parseSplatBin(buf) {
   const total = Math.floor(buf.byteLength / 32);
   const step = Math.max(1, Math.ceil(total / MAX_SPLATS));
@@ -123,23 +127,26 @@ export function parseSplatBin(buf) {
   const dv = new DataView(buf);
   const pos = new Float32Array(count * 3);
   const col = new Float32Array(count * 4);
-  const size = new Float32Array(count);
+  const scale = new Float32Array(count * 3);
+  const quat = new Float32Array(count * 4);
   for (let i = 0; i < count; i++) {
     const o = i * step * 32;
     pos[i * 3] = dv.getFloat32(o, true);
     pos[i * 3 + 1] = dv.getFloat32(o + 4, true);
     pos[i * 3 + 2] = dv.getFloat32(o + 8, true);
-    size[i] = Math.max(
-      dv.getFloat32(o + 12, true),
-      dv.getFloat32(o + 16, true),
-      dv.getFloat32(o + 20, true)
-    );
+    scale[i * 3] = dv.getFloat32(o + 12, true);
+    scale[i * 3 + 1] = dv.getFloat32(o + 16, true);
+    scale[i * 3 + 2] = dv.getFloat32(o + 20, true);
     col[i * 4] = dv.getUint8(o + 24) / 255;
     col[i * 4 + 1] = dv.getUint8(o + 25) / 255;
     col[i * 4 + 2] = dv.getUint8(o + 26) / 255;
     col[i * 4 + 3] = dv.getUint8(o + 27) / 255;
+    quat[i * 4] = (dv.getUint8(o + 29) - 128) / 128; // x
+    quat[i * 4 + 1] = (dv.getUint8(o + 30) - 128) / 128; // y
+    quat[i * 4 + 2] = (dv.getUint8(o + 31) - 128) / 128; // z
+    quat[i * 4 + 3] = (dv.getUint8(o + 28) - 128) / 128; // w
   }
-  return { count, pos, col, size };
+  return { count, pos, col, scale, quat };
 }
 
 export function parsePlySplat(buf) {
@@ -170,7 +177,8 @@ function parseStandardPly(buf, h) {
   const count = Math.floor(total / step);
   const pos = new Float32Array(count * 3);
   const col = new Float32Array(count * 4);
-  const size = new Float32Array(count);
+  const scale = new Float32Array(count * 3);
+  const quat = new Float32Array(count * 4);
   for (let i = 0; i < count; i++) {
     const r = i * step;
     pos[i * 3] = get(r, 'x');
@@ -180,9 +188,15 @@ function parseStandardPly(buf, h) {
     col[i * 4 + 1] = clamp01(0.5 + C0 * get(r, 'f_dc_1'));
     col[i * 4 + 2] = clamp01(0.5 + C0 * get(r, 'f_dc_2'));
     col[i * 4 + 3] = sigmoid(get(r, 'opacity'));
-    size[i] = Math.exp(Math.max(get(r, 'scale_0'), get(r, 'scale_1'), get(r, 'scale_2')));
+    scale[i * 3] = Math.exp(get(r, 'scale_0'));
+    scale[i * 3 + 1] = Math.exp(get(r, 'scale_1'));
+    scale[i * 3 + 2] = Math.exp(get(r, 'scale_2'));
+    quat[i * 4] = get(r, 'rot_1'); // x
+    quat[i * 4 + 1] = get(r, 'rot_2'); // y
+    quat[i * 4 + 2] = get(r, 'rot_3'); // z
+    quat[i * 4 + 3] = get(r, 'rot_0'); // w
   }
-  return { count, pos, col, size };
+  return { count, pos, col, scale, quat };
 }
 
 // PlayCanvas/SuperSplat compressed PLY: per-256-splat `chunk` records hold min/max
@@ -207,11 +221,14 @@ function parseCompressedPly(buf, h) {
   const count = Math.floor(total / step);
   const pos = new Float32Array(count * 3);
   const col = new Float32Array(count * 4);
-  const size = new Float32Array(count);
+  const scale = new Float32Array(count * 3);
+  const quat = new Float32Array(count * 4);
+  const qq = [0, 0, 0, 0];
   for (let i = 0; i < count; i++) {
     const vi = i * step;
     const ci = vi >>> 8; // 256 splats per chunk
     const pp = vu(vi, 'packed_position');
+    const pr = vu(vi, 'packed_rotation');
     const ps = vu(vi, 'packed_scale');
     const pc = vu(vi, 'packed_color');
 
@@ -225,10 +242,27 @@ function parseCompressedPly(buf, h) {
     const msx = cf(ci, 'min_scale_x', 0);
     const msy = cf(ci, 'min_scale_y', 0);
     const msz = cf(ci, 'min_scale_z', 0);
-    const sx = Math.exp((((ps >>> 21) & 2047) / 2047) * (cf(ci, 'max_scale_x', 0) - msx) + msx);
-    const sy = Math.exp((((ps >>> 11) & 1023) / 1023) * (cf(ci, 'max_scale_y', 0) - msy) + msy);
-    const sz = Math.exp(((ps & 2047) / 2047) * (cf(ci, 'max_scale_z', 0) - msz) + msz);
-    size[i] = Math.max(sx, sy, sz);
+    scale[i * 3] = Math.exp((((ps >>> 21) & 2047) / 2047) * (cf(ci, 'max_scale_x', 0) - msx) + msx);
+    scale[i * 3 + 1] = Math.exp(
+      (((ps >>> 11) & 1023) / 1023) * (cf(ci, 'max_scale_y', 0) - msy) + msy
+    );
+    scale[i * 3 + 2] = Math.exp(((ps & 2047) / 2047) * (cf(ci, 'max_scale_z', 0) - msz) + msz);
+
+    // packed_rotation: smallest-three quaternion — top 2 bits index the omitted
+    // (largest) component; the other three are 10-bit signed, reconstructed in
+    // [-1/√2, 1/√2]. (Verified against SuperSplat's own render.)
+    const li = pr >>> 30;
+    const a = (((pr >>> 20) & 1023) / 1023 - 0.5) * SQRT2;
+    const b = (((pr >>> 10) & 1023) / 1023 - 0.5) * SQRT2;
+    const c = ((pr & 1023) / 1023 - 0.5) * SQRT2;
+    qq[(li + 1) & 3] = a;
+    qq[(li + 2) & 3] = b;
+    qq[(li + 3) & 3] = c;
+    qq[li] = Math.sqrt(Math.max(0, 1 - a * a - b * b - c * c));
+    quat[i * 4] = qq[0];
+    quat[i * 4 + 1] = qq[1];
+    quat[i * 4 + 2] = qq[2];
+    quat[i * 4 + 3] = qq[3];
 
     const minr = cf(ci, 'min_r', 0);
     const ming = cf(ci, 'min_g', 0);
@@ -238,7 +272,7 @@ function parseCompressedPly(buf, h) {
     col[i * 4 + 2] = clamp01((((pc >>> 8) & 255) / 255) * (cf(ci, 'max_b', 1) - minb) + minb);
     col[i * 4 + 3] = (pc & 255) / 255;
   }
-  return { count, pos, col, size };
+  return { count, pos, col, scale, quat };
 }
 
 // IEEE 754 half → float (spz v1 centers, ksplat level-1/2 scales).
@@ -271,7 +305,8 @@ export function parseSpz(buf) {
   const count = Math.floor(total / step);
   const pos = new Float32Array(count * 3);
   const col = new Float32Array(count * 4);
-  const size = new Float32Array(count);
+  const scale = new Float32Array(count * 3);
+  const quat = new Float32Array(count * 4);
   const fixed = 1 << fractionalBits;
   const colScale = C0 / 0.15; // Spark: c = (byte/255 - 0.5) * (C0/0.15) + 0.5
   const cdv = new DataView(centers.buffer, centers.byteOffset, centers.byteLength);
@@ -294,9 +329,14 @@ export function parseSpz(buf) {
     col[i * 4 + 1] = clamp01((colors[r * 3 + 1] / 255 - 0.5) * colScale + 0.5);
     col[i * 4 + 2] = clamp01((colors[r * 3 + 2] / 255 - 0.5) * colScale + 0.5);
     col[i * 4 + 3] = alphas[r] / 255;
-    size[i] = Math.exp(Math.max(scales[r * 3], scales[r * 3 + 1], scales[r * 3 + 2]) / 16 - 10);
+    // ponytail: isotropic (max of the 3 scales, identity rotation). .spz stores a
+    // rotation stream (v1-3 after scales; v4 stream index 4) — decode it here to
+    // go fully anisotropic once cross-checked against the spz sample render.
+    const m = Math.exp(Math.max(scales[r * 3], scales[r * 3 + 1], scales[r * 3 + 2]) / 16 - 10);
+    scale[i * 3] = scale[i * 3 + 1] = scale[i * 3 + 2] = m;
+    quat[i * 4 + 3] = 1;
   }
-  return { count, pos, col, size };
+  return { count, pos, col, scale, quat };
 }
 
 // v1-3 body: 16-byte header then contiguous struct-of-arrays.
@@ -403,7 +443,11 @@ export function parseKsplat(buf) {
   const count = Math.floor(total / step);
   const pos = new Float32Array(count * 3);
   const col = new Float32Array(count * 4);
-  const size = new Float32Array(count);
+  // ponytail: isotropic (max scale, identity rotation). .ksplat stores a
+  // quaternion per splat (level 0: 4 f32 after the scales; level 1/2: quantized);
+  // decode it for full anisotropy once cross-checked against the ksplat sample.
+  const scale = new Float32Array(count * 3);
+  const quat = new Float32Array(count * 4);
   const SH_COMP = { 0: 0, 1: 9, 2: 24, 3: 45 };
 
   let sectionBase = 4096 + maxSectionCount * 1024;
@@ -441,24 +485,31 @@ export function parseKsplat(buf) {
           pos[i * 3] = dv.getFloat32(o, true);
           pos[i * 3 + 1] = dv.getFloat32(o + 4, true);
           pos[i * 3 + 2] = dv.getFloat32(o + 8, true);
-          size[i] = Math.max(
-            dv.getFloat32(o + 12, true),
-            dv.getFloat32(o + 16, true),
-            dv.getFloat32(o + 20, true)
-          );
+          scale[i * 3] =
+            scale[i * 3 + 1] =
+            scale[i * 3 + 2] =
+              Math.max(
+                dv.getFloat32(o + 12, true),
+                dv.getFloat32(o + 16, true),
+                dv.getFloat32(o + 20, true)
+              );
           for (let c = 0; c < 4; c++) col[i * 4 + c] = dv.getUint8(o + 40 + c) / 255;
         } else {
           for (let d = 0; d < 3; d++)
             pos[i * 3 + d] =
               (dv.getUint16(o + d * 2, true) - range) * factor +
               dv.getFloat32(bucketsBase + (bucket * 3 + d) * 4, true);
-          size[i] = Math.max(
-            fromHalf(dv.getUint16(o + 6, true)),
-            fromHalf(dv.getUint16(o + 8, true)),
-            fromHalf(dv.getUint16(o + 10, true))
-          );
+          scale[i * 3] =
+            scale[i * 3 + 1] =
+            scale[i * 3 + 2] =
+              Math.max(
+                fromHalf(dv.getUint16(o + 6, true)),
+                fromHalf(dv.getUint16(o + 8, true)),
+                fromHalf(dv.getUint16(o + 10, true))
+              );
           for (let c = 0; c < 4; c++) col[i * 4 + c] = dv.getUint8(o + 20 + c) / 255;
         }
+        quat[i * 4 + 3] = 1;
       }
       if (++inBucket >= bucketCap) {
         bucket++;
@@ -475,7 +526,8 @@ export function parseKsplat(buf) {
     count: emitted,
     pos: pos.subarray(0, emitted * 3),
     col: col.subarray(0, emitted * 4),
-    size: size.subarray(0, emitted),
+    scale: scale.subarray(0, emitted * 3),
+    quat: quat.subarray(0, emitted * 4),
   };
 }
 
@@ -518,7 +570,11 @@ export async function parseSog(buf, decodeImage) {
   const count = Math.floor(total / step);
   const pos = new Float32Array(count * 3);
   const col = new Float32Array(count * 4);
-  const size = new Float32Array(count);
+  // ponytail: isotropic (max codebook scale, identity rotation). .sog v2 stores a
+  // `quats` webp (smallest-three, meta.quats codebook); decode it for full
+  // anisotropy once cross-checked against the sog sample render.
+  const scale = new Float32Array(count * 3);
+  const quat = new Float32Array(count * 4);
   for (let i = 0; i < count; i++) {
     const p = i * step * 4;
     for (let d = 0; d < 3; d++) {
@@ -526,29 +582,15 @@ export async function parseSog(buf, decodeImage) {
       const v = mins[d] + (maxs[d] - mins[d]) * f;
       pos[i * 3 + d] = Math.sign(v) * (Math.exp(Math.abs(v)) - 1);
     }
-    size[i] = Math.max(scaleLut[scales[p]], scaleLut[scales[p + 1]], scaleLut[scales[p + 2]]);
+    const m = Math.max(scaleLut[scales[p]], scaleLut[scales[p + 1]], scaleLut[scales[p + 2]]);
+    scale[i * 3] = scale[i * 3 + 1] = scale[i * 3 + 2] = m;
+    quat[i * 4 + 3] = 1;
     col[i * 4] = colLut[sh0[p]];
     col[i * 4 + 1] = colLut[sh0[p + 1]];
     col[i * 4 + 2] = colLut[sh0[p + 2]];
     col[i * 4 + 3] = sh0[p + 3] / 255;
   }
-  return { count, pos, col, size };
-}
-
-// .splattie: a ZIP bundle. manifest.json points at the base splat (a 3DGS .ply);
-// the LBS weights/skeleton drive animation, which a static preview ignores.
-export async function parseSplattie(buf) {
-  const files = unzip(buf);
-  const mf = files.get('manifest.json');
-  if (!mf) throw new Error('.splattie is missing manifest.json');
-  const manifest = JSON.parse(new TextDecoder().decode(mf));
-  const splat = manifest.avatar && manifest.avatar.splat;
-  if (!splat || !splat.file) throw new Error('.splattie manifest has no base splat');
-  const entry = files.get(splat.file);
-  if (!entry)
-    throw new Error('.splattie references "' + splat.file + '" but it is not in the bundle');
-  const bytes = toBuffer(entry);
-  return splat.format === 'spz' ? parseSpz(bytes) : parsePlySplat(bytes);
+  return { count, pos, col, scale, quat };
 }
 
 // XGRIDS LCC v1: metadata plus index.bin/data.bin companions. SH and
@@ -600,7 +642,11 @@ export function parseLcc(metaBytes, indexBytes, dataBytes) {
   const count = Math.min(total, MAX_SPLATS);
   const pos = new Float32Array(count * 3);
   const col = new Float32Array(count * 4);
-  const size = new Float32Array(count);
+  // ponytail: isotropic (max scale, identity rotation). The 32-byte record has a
+  // rotation after the 3 u16 scales; decode it for full anisotropy once
+  // cross-checked against an LCC sample render.
+  const scaleArr = new Float32Array(count * 3);
+  const quat = new Float32Array(count * 4);
   const data = dataView(dataBytes);
   let out = 0;
   for (const record of records) {
@@ -614,7 +660,7 @@ export function parseLcc(metaBytes, indexBytes, dataBytes) {
       col[out * 4 + 1] = data.getUint8(offset + 13) / 255;
       col[out * 4 + 2] = data.getUint8(offset + 14) / 255;
       col[out * 4 + 3] = data.getUint8(offset + 15) / 255;
-      size[out] = Math.max(
+      const m = Math.max(
         Math.exp(
           lerp(scale.scale.min[0], scale.scale.max[0], data.getUint16(offset + 16, true) / 65535)
         ),
@@ -625,9 +671,11 @@ export function parseLcc(metaBytes, indexBytes, dataBytes) {
           lerp(scale.scale.min[2], scale.scale.max[2], data.getUint16(offset + 20, true) / 65535)
         )
       );
+      scaleArr[out * 3] = scaleArr[out * 3 + 1] = scaleArr[out * 3 + 2] = m;
+      quat[out * 4 + 3] = 1;
     }
   }
-  return { count, pos, col, size };
+  return { count, pos, col, scale: scaleArr, quat };
 }
 
 function lerp(min, max, t) {

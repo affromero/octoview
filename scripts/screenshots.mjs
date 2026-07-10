@@ -72,20 +72,6 @@ const canvasIn = (page) =>
     .first()
     .isVisible()
     .catch(() => false);
-const frameCanvas = async (page, urlPart) => {
-  for (const f of page.frames())
-    if (f.url().includes(urlPart)) {
-      if (
-        await f
-          .locator('canvas')
-          .first()
-          .isVisible()
-          .catch(() => false)
-      )
-        return true;
-    }
-  return false;
-};
 const frameText = async (page, text) => {
   for (const f of page.frames()) {
     if (
@@ -104,13 +90,7 @@ const frameText = async (page, text) => {
 // that animate in — splats, 3D — get extra time so the shot isn't mid-draw).
 const SHOTS = [
   ['report', 'report.html', '4.1 KB', (p) => frameText(p, 'LIVE'), 1200],
-  [
-    'splat',
-    'capybara.splat',
-    '2.8 MB',
-    (p) => canvasIn(p).then((v) => v || frameCanvas(p, 'splat-viewer')),
-    3500,
-  ],
+  ['splat', 'capybara.ply', '4.1 MB', canvasIn, 3500],
   ['points', 'scan.ply', '4.6 MB', canvasIn, 2500],
   [
     'notebook',

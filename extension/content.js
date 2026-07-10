@@ -17,7 +17,7 @@ const ARRAY_EXTS = ['.npy', '.npz'];
 const TABLE_EXTS = ['.parquet', '.arrow', '.feather', '.ipc'];
 const MODEL_EXTS = ['.safetensors', '.gguf'];
 const IMAGE_EXTS = ['.exr', '.hdr', '.tif', '.tiff'];
-const SPLAT_EXTS = ['.splat', '.splattie', '.spz', '.ksplat', '.sog', '.lcc', '.rad'];
+const SPLAT_EXTS = ['.splat', '.spz', '.ksplat', '.sog', '.lcc'];
 const MAX_PREVIEW_BYTES = 64 * 1024 * 1024;
 const MAX_MODEL_BYTES = 32 * 1024 * 1024;
 
@@ -234,7 +234,8 @@ async function render(pane, buf, ext) {
     if (ext === '.lcc') {
       await renderLcc(buf, pane);
     } else if (SPLAT_EXTS.includes(ext) || (ext === '.ply' && isPlySplatHead(buf))) {
-      pane.appendChild(await splatFrame(buf, ext));
+      const { renderSplat } = await loadModule('render-splat.js');
+      await renderSplat(buf, pane, ext);
     } else {
       const { render3D } = await loadModule('render3d.js');
       render3D(buf, pane, ext);
@@ -359,64 +360,6 @@ function reportFrame(html) {
     e.source.postMessage({ type: 'ov-report', html }, '*');
   }
   addEventListener('message', onReady);
-  return f;
-}
-
-// Render a splat inside an extension viewer page (embedded inline as an iframe,
-// the one context whose CSP allows Spark's worker + WASM): a static splat goes to
-// the Spark viewer; a rigged .splattie goes to the interactive splattie-widget
-// viewer. If the frame is blocked or the viewer cannot start (no beacon / error /
-// timeout), every splat format falls back to the main-thread renderer —
-// splat-decode.js covers .splat, 3DGS .ply, .splattie, .spz, .ksplat and .sog.
-
-async function splatFrame(buf, ext) {
-  const splattie = ext === '.splattie';
-  const bytes = buf;
-  const fileName = splattie ? 'file.splattie' : 'splat' + ext;
-  const viewerUrl = browser.runtime.getURL(splattie ? 'splattie-viewer.html' : 'splat-viewer.html');
-  const f = document.createElement('iframe');
-  f.className = 'ov-frame';
-  let settled = false;
-  let sparkError = null;
-  const timer = setTimeout(() => {
-    console.warn('[octoview] Spark viewer frame did not respond in 12s (blocked or slow)');
-    fallback();
-  }, 12000);
-  function fallback() {
-    if (settled) return;
-    settled = true;
-    clearTimeout(timer);
-    removeEventListener('message', onMsg);
-    const mount = document.createElement('div');
-    mount.className = 'ov-fill';
-    mount.style.height = '78vh';
-    f.replaceWith(mount);
-    if (sparkError)
-      console.warn(
-        '[octoview] Spark viewer failed (' + sparkError + '), using main-thread renderer'
-      );
-    if (ext === '.rad') {
-      msg(mount, 'RAD previews require the Spark viewer.');
-      return;
-    }
-    loadModule('render-splat.js').then(({ renderSplat }) => renderSplat(buf, mount, ext));
-  }
-  function onMsg(e) {
-    if (e.source !== f.contentWindow || !e.data) return;
-    if (e.data.type === 'ov-splat-ready') {
-      f.contentWindow.postMessage({ type: 'ov-splat', bytes, fileName }, new URL(viewerUrl).origin);
-    } else if (e.data.type === 'ov-splat-ok') {
-      settled = true;
-      clearTimeout(timer);
-      removeEventListener('message', onMsg);
-    } else if (e.data.type === 'ov-splat-error') {
-      sparkError = e.data.error;
-      console.warn('[octoview] Spark path failed, falling back:', e.data.error);
-      fallback();
-    }
-  }
-  addEventListener('message', onMsg);
-  f.src = viewerUrl;
   return f;
 }
 

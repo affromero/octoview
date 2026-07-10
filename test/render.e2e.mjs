@@ -125,11 +125,6 @@ const CASES = [
     ok: (r) => r.mainCanvas && /splats/.test(r.text),
   },
   {
-    name: 'head.splattie',
-    sample: 'samples/head.splattie',
-    ok: (r) => r.mainCanvas && /splats/.test(r.text),
-  },
-  {
     name: 'capybara.spz',
     sample: 'samples/capybara.spz',
     ok: (r) => r.mainCanvas && /splats/.test(r.text),

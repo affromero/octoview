@@ -9,13 +9,11 @@ import {
   parseSplatBin,
   parsePlySplat,
   isPlySplat,
-  parseSplattie,
   parseSpz,
   parseKsplat,
   parseSog,
   parseLcc,
 } from '../extension/splat-decode.js';
-import { unzip } from '../extension/unzip.js';
 import { zipSync } from 'fflate';
 
 const fixture = (name) => {
@@ -110,14 +108,6 @@ describe('unzipNpz / unzip', () => {
     const byName = Object.fromEntries(arrays.map((a) => [a.name, a]));
     expect(byName.field.dims).toEqual([64, 96]);
     expect(byName.signal.dims).toEqual([240]);
-  });
-
-  it('inflates DEFLATE zip entries (fflate) for a .splattie bundle', () => {
-    const files = unzip(fixture('head.splattie'));
-    expect(files.has('manifest.json')).toBe(true);
-    const manifest = JSON.parse(new TextDecoder().decode(files.get('manifest.json')));
-    expect(manifest.format).toBe('splattie');
-    expect(files.has(manifest.avatar.splat.file)).toBe(true); // the base splat ply
   });
 });
 
@@ -243,7 +233,8 @@ describe('splat decoders', () => {
     expect(splat.col[1]).toBeCloseTo(128 / 255);
     expect(splat.col[2]).toBe(0);
     expect(splat.col[3]).toBeCloseTo(200 / 255);
-    expect(splat.size[0]).toBeCloseTo(1);
+    expect(splat.scale[0]).toBeCloseTo(1);
+    expect(splat.quat[3]).toBe(1); // identity (isotropic-preserved)
   });
 
   it('decodes the committed LCC sample bundle', () => {
@@ -303,7 +294,7 @@ describe('splat decoders', () => {
     }
     expect(lo).toBeGreaterThanOrEqual(0);
     expect(hi).toBeLessThanOrEqual(1);
-    expect(s.size.some((v) => v > 0)).toBe(true);
+    expect(s.scale.some((v) => v > 0)).toBe(true);
   });
 
   it('computes the data offset from bytes, not string length (multibyte header)', () => {
@@ -327,11 +318,6 @@ describe('splat decoders', () => {
       'ply\nformat ascii 1.0\nelement vertex 1\nproperty float x\nproperty float f_dc_0\nproperty float scale_0\nproperty float rot_0\nend_header\n0 0 0 0\n'
     );
     expect(() => parsePlySplat(ascii.buffer)).toThrow(/ASCII/);
-  });
-
-  it('unzips a .splattie bundle and renders its base ply', async () => {
-    const s = await parseSplattie(fixture('head.splattie'));
-    expect(s.count).toBe(20018);
   });
 });
 
@@ -472,8 +458,9 @@ describe('spark splat decoders (spz / ksplat / sog)', () => {
     // splat0: f=0 -> v=-1 -> -(e^1 - 1); splat1: f=1 -> v=1 -> e^1 - 1
     expect(s.pos[0]).toBeCloseTo(-(Math.E - 1), 5);
     expect(s.pos[3]).toBeCloseTo(Math.E - 1, 5);
-    expect(s.size[0]).toBeCloseTo(0.5, 5);
-    expect(s.size[1]).toBeCloseTo(2, 5);
+    expect(s.scale[0]).toBeCloseTo(0.5, 5); // splat0 isotropic
+    expect(s.scale[3]).toBeCloseTo(2, 5); // splat1 isotropic
+    expect(s.quat[3]).toBe(1); // identity (isotropic-preserved)
     // sh0 codebook: idx0 -> C0*0+0.5 = 0.5, idx1 -> clamp(C0*1+0.5)
     expect(s.col[0]).toBeCloseTo(0.5, 5);
     expect(s.col[4]).toBeCloseTo(0.28209479177387814 + 0.5, 5);
@@ -488,13 +475,6 @@ describe('spark splat decoders (spz / ksplat / sog)', () => {
       'meta.json': new TextEncoder().encode(JSON.stringify({ count: 1, means: {} })),
     });
     await expect(parseSog(v1, async () => {})).rejects.toThrow(/v1/);
-  });
-
-  it('parses a .splattie with an spz base splat', async () => {
-    // repackage head.splattie's manifest to point at an spz base
-    const files = unzip(fixture('head.splattie'));
-    const manifest = JSON.parse(new TextDecoder().decode(files.get('manifest.json')));
-    expect(manifest.avatar.splat.format ?? 'ply').not.toBe('spz'); // fixture is ply-based
   });
 });
 

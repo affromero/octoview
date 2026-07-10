@@ -24,12 +24,11 @@ await rasterizeIcons(join(OUT, 'icons'), SIZES);
 
 const manifest = JSON.parse(await readFile(join(OUT, 'manifest.json'), 'utf8'));
 // Chrome refuses to load ANY extension whose extension_pages CSP contains
-// 'unsafe-inline' or blob: (both fine in Safari, where blob: carries Spark's
-// worker). So the Chrome pages CSP is the strict minimum; Spark's blob worker
-// then CSP-fails in the viewer page and splats take the main-thread fallback
-// renderer, which test/chrome.e2e.mjs verifies.
+// 'unsafe-inline' (fine in Safari, for the report probe). So the Chrome pages CSP
+// is the strict minimum. Splats render in the content script's isolated world
+// (native WebGL2, no extension page needed), so no relaxation is required.
 manifest.content_security_policy.extension_pages =
-  "script-src 'self' 'wasm-unsafe-eval'; connect-src 'none'; object-src 'none'";
+  "script-src 'self'; connect-src 'none'; object-src 'none'";
 manifest.sandbox = { pages: ['viewer.html'] };
 // The sandbox page hosts the report's own scripts; deny it network so a
 // malicious report cannot beacon "user viewed file X" back out. 'unsafe-inline'
