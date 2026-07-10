@@ -4,6 +4,7 @@
 // .ply, the PlayCanvas/SuperSplat COMPRESSED .ply (chunk + packed_* uints, what
 // splat-transform emits), and the .splattie bundle.
 import { unzip, toBuffer } from './unzip.js';
+import { gunzipSync } from './vendor/fflate.esm.js';
 
 const C0 = 0.28209479177387814; // SH band-0 factor, f_dc -> base color
 const MAX_SPLATS = 800000; // ponytail: subsample beyond this to keep the sort snappy
@@ -215,6 +216,211 @@ function parseCompressedPly(buf, h) {
   return { count, pos, col, size };
 }
 
+// IEEE 754 half → float (spz v1 centers, ksplat level-1/2 scales).
+function fromHalf(h) {
+  const s = (h & 0x8000) >> 15;
+  const e = (h & 0x7c00) >> 10;
+  const f = h & 0x03ff;
+  if (e === 0) return (s ? -1 : 1) * Math.pow(2, -14) * (f / 1024);
+  if (e === 31) return f ? NaN : (s ? -1 : 1) * Infinity;
+  return (s ? -1 : 1) * Math.pow(2, e - 15) * (1 + f / 1024);
+}
+
+// Niantic .spz v1-3: the whole file is gzip; inside, a 16-byte header then
+// struct-of-arrays: centers, alphas(u8), colors(u8 rgb), scales(u8 log), quats,
+// SH. The isotropic preview stops reading after scales — quats/SH never parsed.
+// Layout and constants follow Spark's SpzReader (the reference implementation).
+export function parseSpz(buf) {
+  const b = gunzipSync(new Uint8Array(buf));
+  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  if (dv.getUint32(0, true) !== 0x5053474e) throw new Error('not an .spz file (bad magic)');
+  const version = dv.getUint32(4, true);
+  if (version < 1 || version > 3)
+    throw new Error('.spz version ' + version + ' not supported (v1-3 only)');
+  const total = dv.getUint32(8, true);
+  const fractionalBits = b[13];
+  const centersOff = 16;
+  const centerBytes = version === 1 ? 6 : 9;
+  const alphasOff = centersOff + total * centerBytes;
+  const colorsOff = alphasOff + total;
+  const scalesOff = colorsOff + total * 3;
+  if (scalesOff + total * 3 > b.length) throw new Error('.spz data truncated');
+
+  const step = Math.max(1, Math.ceil(total / MAX_SPLATS));
+  const count = Math.floor(total / step);
+  const pos = new Float32Array(count * 3);
+  const col = new Float32Array(count * 4);
+  const size = new Float32Array(count);
+  const fixed = 1 << fractionalBits;
+  const colScale = C0 / 0.15; // Spark: c = (byte/255 - 0.5) * (C0/0.15) + 0.5
+  for (let i = 0; i < count; i++) {
+    const r = i * step;
+    if (version === 1) {
+      const o = centersOff + r * 6;
+      pos[i * 3] = fromHalf(dv.getUint16(o, true));
+      pos[i * 3 + 1] = fromHalf(dv.getUint16(o + 2, true));
+      pos[i * 3 + 2] = fromHalf(dv.getUint16(o + 4, true));
+    } else {
+      const o = centersOff + r * 9;
+      for (let d = 0; d < 3; d++) {
+        const u = b[o + d * 3] | (b[o + d * 3 + 1] << 8) | (b[o + d * 3 + 2] << 16);
+        pos[i * 3 + d] = ((u << 8) >> 8) / fixed; // sign-extend 24-bit
+      }
+    }
+    col[i * 4] = clamp01((b[colorsOff + r * 3] / 255 - 0.5) * colScale + 0.5);
+    col[i * 4 + 1] = clamp01((b[colorsOff + r * 3 + 1] / 255 - 0.5) * colScale + 0.5);
+    col[i * 4 + 2] = clamp01((b[colorsOff + r * 3 + 2] / 255 - 0.5) * colScale + 0.5);
+    col[i * 4 + 3] = b[alphasOff + r] / 255;
+    const so = scalesOff + r * 3;
+    size[i] = Math.exp(Math.max(b[so], b[so + 1], b[so + 2]) / 16 - 10);
+  }
+  return { count, pos, col, size };
+}
+
+// mkkellogg .ksplat: 4096-byte header, 1024-byte section headers, then per
+// section: partial-bucket sizes (u32 each), bucket centers (f32 x3 each), splat
+// records. Levels 1/2 quantize centers as u16 relative to their bucket center;
+// scales are stored LINEAR (f32 / half — no exp anywhere, unlike PLY/spz).
+// Layout follows Spark's decodeKsplat. Rotations/SH are skipped (isotropic).
+export function parseKsplat(buf) {
+  const dv = new DataView(buf);
+  if (dv.getUint8(0) !== 0 || dv.getUint8(1) < 1) throw new Error('.ksplat version not supported');
+  const maxSectionCount = dv.getUint32(4, true);
+  const sectionCount = dv.getUint32(8, true);
+  const total = dv.getUint32(16, true);
+  const level = dv.getUint16(20, true);
+  if (level > 2) throw new Error('.ksplat compression level ' + level + ' not supported');
+
+  const step = Math.max(1, Math.ceil(total / MAX_SPLATS));
+  const count = Math.floor(total / step);
+  const pos = new Float32Array(count * 3);
+  const col = new Float32Array(count * 4);
+  const size = new Float32Array(count);
+  const SH_COMP = { 0: 0, 1: 9, 2: 24, 3: 45 };
+
+  let sectionBase = 4096 + maxSectionCount * 1024;
+  let emitted = 0;
+  let seen = 0;
+  for (let s = 0; s < sectionCount && emitted < count; s++) {
+    const hb = 4096 + s * 1024;
+    const secSplats = dv.getUint32(hb, true);
+    const maxSplats = dv.getUint32(hb + 4, true);
+    const bucketSize = dv.getUint32(hb + 8, true);
+    const bucketCount = dv.getUint32(hb + 12, true);
+    const bucketBlockSize = dv.getFloat32(hb + 16, true);
+    const bucketStorage = dv.getUint16(hb + 20, true);
+    const range = dv.getUint32(hb + 24, true) || 32767;
+    const fullBuckets = dv.getUint32(hb + 32, true);
+    const partialBuckets = dv.getUint32(hb + 36, true);
+    const shComp = SH_COMP[dv.getUint16(hb + 40, true)] ?? 0;
+    const stride = level === 0 ? 44 + shComp * 4 : level === 1 ? 24 + shComp * 2 : 24 + shComp;
+    const factor = bucketBlockSize / 2 / range;
+
+    const metaSize = partialBuckets * 4;
+    const bucketsBase = sectionBase + metaSize;
+    const dataBase = sectionBase + bucketStorage * bucketCount + metaSize;
+
+    // Sequential walk so bucket boundaries (full buckets first, then partial
+    // buckets with explicit sizes) stay in lockstep with the splat index.
+    let bucket = 0;
+    let inBucket = 0;
+    let bucketCap = fullBuckets > 0 ? bucketSize : dv.getUint32(sectionBase, true);
+    for (let j = 0; j < secSplats && emitted < count; j++, seen++) {
+      const o = dataBase + j * stride;
+      if (seen % step === 0) {
+        const i = emitted++;
+        if (level === 0) {
+          pos[i * 3] = dv.getFloat32(o, true);
+          pos[i * 3 + 1] = dv.getFloat32(o + 4, true);
+          pos[i * 3 + 2] = dv.getFloat32(o + 8, true);
+          size[i] = Math.max(
+            dv.getFloat32(o + 12, true),
+            dv.getFloat32(o + 16, true),
+            dv.getFloat32(o + 20, true)
+          );
+          for (let c = 0; c < 4; c++) col[i * 4 + c] = dv.getUint8(o + 40 + c) / 255;
+        } else {
+          for (let d = 0; d < 3; d++)
+            pos[i * 3 + d] =
+              (dv.getUint16(o + d * 2, true) - range) * factor +
+              dv.getFloat32(bucketsBase + (bucket * 3 + d) * 4, true);
+          size[i] = Math.max(
+            fromHalf(dv.getUint16(o + 6, true)),
+            fromHalf(dv.getUint16(o + 8, true)),
+            fromHalf(dv.getUint16(o + 10, true))
+          );
+          for (let c = 0; c < 4; c++) col[i * 4 + c] = dv.getUint8(o + 20 + c) / 255;
+        }
+      }
+      if (++inBucket >= bucketCap) {
+        bucket++;
+        inBucket = 0;
+        bucketCap =
+          bucket < fullBuckets
+            ? bucketSize
+            : dv.getUint32(sectionBase + (bucket - fullBuckets) * 4, true);
+      }
+    }
+    sectionBase = dataBase + maxSplats * stride;
+  }
+  return {
+    count: emitted,
+    pos: pos.subarray(0, emitted * 3),
+    col: col.subarray(0, emitted * 4),
+    size: size.subarray(0, emitted),
+  };
+}
+
+// PlayCanvas .sog v2: a ZIP of meta.json + webp data textures. Positions split
+// 16-bit across means_l/means_u then inverse-log; scales and colors index
+// 256-entry codebooks; sh0 alpha IS the opacity byte. decodeImage(bytes) ->
+// {data: Uint8ClampedArray rgba, width, height} is injected by the caller —
+// webp decoding needs DOM APIs, and a plain 2D canvas would premultiply the
+// alpha-carrying data channels (see render-splat.js for the WebGL2 readback).
+export async function parseSog(buf, decodeImage) {
+  const files = unzip(buf);
+  const mf = files.get('meta.json');
+  if (!mf) throw new Error('.sog is missing meta.json');
+  const meta = JSON.parse(new TextDecoder().decode(mf));
+  if (!('version' in meta)) throw new Error('.sog v1 (pre-codebook) not supported');
+  if (meta.version !== 2) throw new Error('.sog version ' + meta.version + ' not supported');
+  const img = async (name) => {
+    const entry = files.get(name);
+    if (!entry) throw new Error('.sog is missing ' + name);
+    return (await decodeImage(entry)).data;
+  };
+  const [lo, hi, scales, sh0] = await Promise.all([
+    img(meta.means.files[0]),
+    img(meta.means.files[1]),
+    img(meta.scales.files[0]),
+    img(meta.sh0.files[0]),
+  ]);
+  const total = meta.count;
+  const { mins, maxs } = meta.means;
+  const scaleLut = meta.scales.codebook.map((x) => Math.exp(x));
+  const colLut = meta.sh0.codebook.map((x) => clamp01(C0 * x + 0.5));
+
+  const step = Math.max(1, Math.ceil(total / MAX_SPLATS));
+  const count = Math.floor(total / step);
+  const pos = new Float32Array(count * 3);
+  const col = new Float32Array(count * 4);
+  const size = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
+    const p = i * step * 4;
+    for (let d = 0; d < 3; d++) {
+      const f = (lo[p + d] + (hi[p + d] << 8)) / 65535;
+      const v = mins[d] + (maxs[d] - mins[d]) * f;
+      pos[i * 3 + d] = Math.sign(v) * (Math.exp(Math.abs(v)) - 1);
+    }
+    size[i] = Math.max(scaleLut[scales[p]], scaleLut[scales[p + 1]], scaleLut[scales[p + 2]]);
+    col[i * 4] = colLut[sh0[p]];
+    col[i * 4 + 1] = colLut[sh0[p + 1]];
+    col[i * 4 + 2] = colLut[sh0[p + 2]];
+    col[i * 4 + 3] = sh0[p + 3] / 255;
+  }
+  return { count, pos, col, size };
+}
+
 // .splattie: a ZIP bundle. manifest.json points at the base splat (a 3DGS .ply);
 // the LBS weights/skeleton drive animation, which a static preview ignores.
 export async function parseSplattie(buf) {
@@ -227,6 +433,6 @@ export async function parseSplattie(buf) {
   const entry = files.get(splat.file);
   if (!entry)
     throw new Error('.splattie references "' + splat.file + '" but it is not in the bundle');
-  if (splat.format === 'spz') throw new Error('compressed .spz base splats are not supported yet');
-  return parsePlySplat(toBuffer(entry));
+  const bytes = toBuffer(entry);
+  return splat.format === 'spz' ? parseSpz(bytes) : parsePlySplat(bytes);
 }
