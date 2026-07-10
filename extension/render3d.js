@@ -18,6 +18,14 @@ export function render3D(buf, mount, ext) {
   mount.style.position = 'relative';
 
   const fail = (e) => {
+    // Release the WebGL context we allocated before parsing (a bad file must not
+    // leak a context; the render loop that normally disposes never starts here).
+    try {
+      renderer.dispose();
+      renderer.forceContextLoss();
+    } catch {
+      /* renderer not created yet */
+    }
     mount.innerHTML = '';
     const p = document.createElement('p');
     p.className = 'ov-msg';

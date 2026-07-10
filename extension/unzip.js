@@ -3,13 +3,15 @@
 // every Safari version and handles store, deflate, data descriptors and ZIP64.
 import { unzipSync } from './vendor/fflate.esm.js';
 
-const CAP = 1 << 30; // refuse a single entry that inflates past 1GB (bomb guard)
+const CAP = 1 << 30; // refuse if a single entry, or the total, inflates past 1GB
 
 // Returns a name -> Uint8Array map of the ZIP's entries.
 export function unzip(buf) {
+  let total = 0;
   const files = unzipSync(new Uint8Array(buf), {
     filter: (f) => {
-      if (f.originalSize > CAP) throw new Error('zip entry too large to preview');
+      total += f.originalSize;
+      if (f.originalSize > CAP || total > CAP) throw new Error('zip too large to preview');
       return true;
     },
   });

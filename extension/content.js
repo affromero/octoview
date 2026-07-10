@@ -21,8 +21,12 @@ const SPLAT_EXTS = ['.splat', '.splattie'];
 // Lets us route .ply to the splat vs the mesh/point-cloud renderer without
 // loading either module first.
 function isPlySplatHead(buf) {
-  const head = new TextDecoder().decode(new Uint8Array(buf, 0, Math.min(8192, buf.byteLength)));
-  return /f_dc_0/.test(head) && /scale_0/.test(head) && /rot_0/.test(head);
+  const head = new TextDecoder().decode(new Uint8Array(buf, 0, Math.min(16384, buf.byteLength)));
+  return (
+    /property\s+\S+\s+f_dc_0\b/.test(head) &&
+    /property\s+\S+\s+scale_0\b/.test(head) &&
+    /property\s+\S+\s+rot_0\b/.test(head)
+  );
 }
 
 // Heavy renderers are ES modules, imported only when their file type is opened,
