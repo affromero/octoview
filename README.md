@@ -44,21 +44,33 @@ repos** because they can't authenticate as you. octoview can. It is a Safari ext
 your existing GitHub session: it adds a **Preview** button on any `blob` page, fetches the file with
 your cookies, and renders it in place. No service, no upload, no personal access token.
 
+### Why in the world would someone store a splat in GitHub?
+
+Not every splat is a city-scale capture. Small scenes, fixtures, product captures, visual regression
+assets, and the exact outputs attached to an experiment or demo often belong beside the code that
+created or consumes them. A repository gives those files an immutable commit, reviewable changes,
+release tags, and a shared place for collaborators to fetch the same artifact.
+
+That does not make GitHub a streaming CDN or an archive for enormous captures. Keep large or
+frequently replaced scenes in object storage, releases, or an asset pipeline—and commit a stable
+reference, preview image, or reduced sample instead. octoview is for the useful middle ground:
+opening a real, reasonably sized asset directly from the private repository where its context lives.
+
 ## What it previews
 
 Everything runs through one small, unit-tested core that dispatches by file extension. Each row is a
 renderer. Status is **verified in WebKit (Safari's engine) by an automated render test**.
 
-| Type                           | Extensions                                                                          | Renderer                                                                                         | Status |
-| ------------------------------ | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | :----: |
-| **HTML reports / plots**       | `.html` `.htm`                                                                      | extension viewer frame: the report's own scripts run, sandboxed; static fallback                 |   ✅   |
-| **Jupyter notebooks**          | `.ipynb`                                                                            | Plotly outputs render live from the MIME bundle; the rest GitHub strips is kept                  |   ✅   |
-| **3D meshes and point clouds** | `.glb` `.gltf` `.obj` `.ply` `.pcd`                                                 | three.js loaders (parsed on the main thread), gizmo + point sliders                              |   ✅   |
-| **Gaussian splats**            | `.splat` `.ply` (3DGS + compressed) `.splattie` `.spz` (v1-4) `.ksplat` `.sog` (v2) | main-thread gaussian sprites, depth-sorted; every format Spark reads, decoded without its worker |   ✅   |
-| **Model graphs**               | `.safetensors` `.gguf` `.onnx`                                                      | tensor + metadata tables; ONNX gets a Netron-style SVG graph of the ops                          |   ✅   |
-| **Tabular data**               | `.parquet` `.arrow` `.feather` `.ipc`                                               | hyparquet / flechette, sticky-header table                                                       |   ✅   |
-| **Array previews**             | `.npy` `.npz`                                                                       | viridis heatmap / RGB image, with a raw-numbers view (1-3D)                                      |   ✅   |
-| **Scientific images**          | `.exr` `.hdr` `.tif` `.tiff`                                                        | tone-mapped to a canvas with an exposure slider                                                  |   ✅   |
+| Type                           | Extensions                                                                                   | Renderer                                                                                | Status |
+| ------------------------------ | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | :----: |
+| **HTML reports / plots**       | `.html` `.htm`                                                                               | extension viewer frame: the report's own scripts run, sandboxed; static fallback        |   ✅   |
+| **Jupyter notebooks**          | `.ipynb`                                                                                     | Plotly outputs render live from the MIME bundle; the rest GitHub strips is kept         |   ✅   |
+| **3D meshes and point clouds** | `.glb` `.gltf` `.obj` `.ply` `.pcd`                                                          | three.js loaders (parsed on the main thread), gizmo + point sliders                     |   ✅   |
+| **Gaussian splats**            | `.splat` `.ply` (3DGS + compressed) `.splattie` `.spz` (v1-4) `.ksplat` `.sog` `.lcc` `.rad` | Spark previews RAD; LCC loads `index.bin` and `data.bin` from the same GitHub directory |   ✅   |
+| **Model graphs**               | `.safetensors` `.gguf` `.onnx`                                                               | tensor + metadata tables; ONNX gets a Netron-style SVG graph of the ops                 |   ✅   |
+| **Tabular data**               | `.parquet` `.arrow` `.feather` `.ipc`                                                        | hyparquet / flechette, sticky-header table                                              |   ✅   |
+| **Array previews**             | `.npy` `.npz`                                                                                | viridis heatmap / RGB image, with a raw-numbers view (1-3D)                             |   ✅   |
+| **Scientific images**          | `.exr` `.hdr` `.tif` `.tiff`                                                                 | tone-mapped to a canvas with an exposure slider                                         |   ✅   |
 
 > **On WebKit.** Two Safari limits shape the design. (1) Renderers parse file bytes on the main
 > thread (three.js loaders, pure-JS parsers) because Safari cannot fetch a main-thread `blob:` URL
@@ -76,7 +88,7 @@ renderer. Status is **verified in WebKit (Safari's engine) by an automated rende
 
 Open any file below on GitHub and click **Preview** (after [installing](#develop)).
 
-- **3D and Gaussian splats:** [cube.obj](samples/cube.obj) · [points.ply](samples/points.ply) · [cloud.pcd](samples/cloud.pcd) · [capybara.splat](samples/capybara.splat) · [capybara.ply](samples/capybara.ply) (compressed 3DGS) · [capybara.spz](samples/capybara.spz) · [capybara.ksplat](samples/capybara.ksplat) · [capybara.sog](samples/capybara.sog) · [head.splattie](samples/head.splattie) · [butterfly.spz](samples/butterfly.spz)
+- **3D and Gaussian splats:** [cube.obj](samples/cube.obj) · [points.ply](samples/points.ply) · [cloud.pcd](samples/cloud.pcd) · [capybara.splat](samples/capybara.splat) · [capybara.ply](samples/capybara.ply) (compressed 3DGS) · [capybara.spz](samples/capybara.spz) · [capybara.ksplat](samples/capybara.ksplat) · [capybara.sog](samples/capybara.sog) · [head.splattie](samples/head.splattie) · [butterfly.spz](samples/butterfly.spz) · [capybara-lod.rad](samples/capybara-lod.rad) · [LCC bundle](samples/lcc/meta.lcc)
 - **Arrays and tables:** [array.npy](samples/array.npy) · [array.npz](samples/array.npz) · [metrics.parquet](samples/metrics.parquet) · [metrics.arrow](samples/metrics.arrow)
 - **Model graphs:** [model.safetensors](samples/model.safetensors) · [model.gguf](samples/model.gguf) · [model.onnx](samples/model.onnx)
 - **Scientific images:** [render.hdr](samples/render.hdr) · [render.exr](samples/render.exr) · [depth.tiff](samples/depth.tiff)
@@ -116,8 +128,10 @@ Everything renders **inline in the blob view**, no new tab. Clicking **Preview**
 the rendered file; clicking it again swaps back.
 
 - **Private-repo access.** The content script runs on `github.com`, so it has your cookies. It
-  resolves the file's tokenized `raw.githubusercontent.com` URL and fetches the bytes. No PAT, no
-  OAuth.
+  resolves the file's tokenized `raw.githubusercontent.com` URL and fetches the bytes. When that
+  response is a Git LFS pointer, octoview follows GitHub's page-provided LFS download URL instead.
+  GitHub-hosted LFS files work for private repos with the existing browser session — no PAT or OAuth.
+  External LFS remotes are intentionally out of scope.
 - **Rendering under GitHub's CSP.** A content script runs in an isolated world that github's CSP does
   not bind, so octoview's own renderers (three.js on a `<canvas>`, DOM tables, notebook cells) run
   right there in the page. Heavy renderers (the three.js bundle) are lazy-imported only when their
@@ -141,8 +155,8 @@ The dispatch, URL resolution, and notebook rendering live in
 ```mermaid
 flowchart TD
     subgraph blob["github.com blob page (content-script isolated world)"]
-        content["Preview button · cookie fetch<br/>(content.js)"]
-        core["dispatch by extension · raw-URL resolve · notebook render<br/>(core.js, pure — unit-tested)"]
+        content["Preview button · cookie fetch<br/>LFS download fallback<br/>(content.js)"]
+        core["dispatch by extension · raw/LFS-URL resolve · notebook render<br/>(core.js, pure — unit-tested)"]
         subgraph renderers["Lazy-imported renderers"]
             r3d["render3d.js<br/>mesh · point cloud"]
             rsplat["render-splat.js<br/>main-thread splats"]
@@ -157,10 +171,13 @@ flowchart TD
     end
 
     gh[("raw.githubusercontent.com<br/>(session cookies)")]
+    lfs[("media.githubusercontent.com<br/>(GitHub-hosted LFS object)")]
     vendor[("vendor/<br/>three.js · Plotly · Spark<br/>hyparquet · flechette · fflate+fzstd · marked")]
 
     content -->|bytes| core
-    gh -->|fetch| content
+    gh -->|raw bytes or LFS pointer| content
+    content -->|LFS pointer → download| lfs
+    lfs -->|bytes| content
     core --> renderers
     rsplat --> decode
     vendor -.-> renderers
@@ -189,9 +206,10 @@ adds a small button on GitHub pages; the larger renderer bundles load only after
 
 Previews still need memory while a file is being decoded and rendered, especially for 3D assets and
 scientific images. To keep that bounded, octoview limits a normal source download to **64 MiB** and
-model metadata reads to **32 MiB**. ZIP-based previews (`.npz` and `.splattie`) also refuse archives
-whose uncompressed entries total more than **64 MiB**. A preview in progress can be started only
-once, and is cancelled if you close the preview or navigate away.
+model metadata reads to **32 MiB**; those same limits apply to GitHub-hosted Git LFS downloads.
+ZIP-based previews (`.npz` and `.splattie`) also refuse archives whose uncompressed entries total
+more than **64 MiB**. A preview in progress can be started only once, and is cancelled if you close
+the preview or navigate away.
 
 Those limits apply to source bytes, not every renderer's decoded representation: an EXR/HDR image,
 for example, expands into float pixels and a canvas. Keep very high-resolution images and unusually
@@ -229,7 +247,7 @@ It comes up, so here is the reasoning:
 ## Roadmap
 
 - **Firefox listing.** The AMO-ready package builds from this repo (`npm run build:firefox`, lint-clean); what remains is the listing itself and a runtime check in Gecko (Playwright cannot drive Firefox extensions, so that check is selenium/geckodriver work).
-- **More formats on demand.** `.lcc` (XGRIDS) has an open spec and an MIT reference reader, but it is a multi-file container that fits a single-blob previewer poorly — deferred until real demand. `.rad` was dropped: no public gaussian-splat spec or files exist under that name (and the extension already means Radiance scenes).
+- **More formats on demand.** LCC and RAD are supported. An LCC preview needs the `.lcc` metadata file plus its `index.bin` and `data.bin` siblings in the same GitHub directory; RAD is rendered by Spark.
 - **Other browsers and new formats: PRs welcome.** The renderer interface is a single extension-keyed dispatch, so adding a format is mostly one self-contained module plus a WebKit render test. Contributions are the fastest path to wider coverage.
 
 ## Develop
@@ -269,8 +287,8 @@ which is how Safari-specific breakage that jsdom cannot see gets caught.
 ```
 extension/
   manifest.json        MV3 config (content scripts, web-accessible render modules)
-  core.js              pure and DOM logic: dispatch, URL resolve, notebook render (unit-tested)
-  content.js           github.com: button, fetch with cookies, inline render pane
+  core.js              pure and DOM logic: dispatch, raw/LFS URL resolve, notebook render (unit-tested)
+  content.js           github.com: button, cookie fetch + GitHub LFS download, inline render pane
   viewer.html          extension page hosting a report's sandboxed live frame (CSP probe + fallback)
   render3d.js          three.js mesh and point-cloud renderer (gizmo, point sliders)
   render-splat.js      main-thread Gaussian splat renderer (.splat, 3DGS/compressed .ply, .splattie)

@@ -14,8 +14,18 @@ import {
   parseSog,
   isPlySplat,
 } from './splat-decode.js';
+import { parseLcc } from './lcc-decode.js';
 
 export { isPlySplat };
+
+// Source coordinate systems match the general 3D renderer. three.js uses
+// OpenGL's Y-up orientation, so these rotations reinterpret incoming splats.
+const X = new THREE.Vector3(1, 0, 0);
+const CONVENTIONS = {
+  'OpenGL (Y-up)': new THREE.Quaternion(),
+  'Z-up (Blender, ROS, CAD)': new THREE.Quaternion().setFromAxisAngle(X, -Math.PI / 2),
+  'OpenCV (Y-down, Z-fwd)': new THREE.Quaternion().setFromAxisAngle(X, Math.PI),
+};
 
 // Decode a webp data texture to raw RGBA without alpha premultiplication — a 2D
 // canvas premultiplies and corrupts the color channels of low-alpha pixels
@@ -63,6 +73,18 @@ export async function renderSplat(buf, mount, ext) {
               : ext === '.sog'
                 ? await parseSog(buf, decodeImage)
                 : parsePlySplat(buf);
+    if (!splat.count) throw new Error('no splats found');
+    view(splat, mount);
+  } catch (e) {
+    fail(mount, e);
+  }
+}
+
+export function renderLcc(metaBytes, indexBytes, dataBytes, mount) {
+  ensureStyle();
+  mount.style.position = 'relative';
+  try {
+    const splat = parseLcc(metaBytes, indexBytes, dataBytes);
     if (!splat.count) throw new Error('no splats found');
     view(splat, mount);
   } catch (e) {
@@ -127,30 +149,44 @@ function view(splat, mount) {
         gl_FragColor = vec4(vColor.rgb, vColor.a * a * uOpacity);
       }`,
   });
-  scene.add(new THREE.Points(geo, material));
+  const splatPoints = new THREE.Points(geo, material);
+  scene.add(splatPoints);
 
   // Frame the cloud.
-  const box = new THREE.Box3().setFromBufferAttribute(geo.getAttribute('position'));
-  const center = box.getCenter(new THREE.Vector3());
-  const sizeV = box.getSize(new THREE.Vector3());
-  const maxDim = Math.max(sizeV.x, sizeV.y, sizeV.z) || 1;
-  camera.position.copy(center).add(new THREE.Vector3(0, 0, maxDim * 1.8));
-  controls.target.copy(center);
-  controls.update();
+  const frame = () => {
+    const box = new THREE.Box3().setFromObject(splatPoints);
+    const center = box.getCenter(new THREE.Vector3());
+    const sizeV = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(sizeV.x, sizeV.y, sizeV.z) || 1;
+    camera.position.copy(center).add(new THREE.Vector3(0, 0, maxDim * 1.8));
+    camera.near = maxDim / 100;
+    camera.far = maxDim * 100;
+    camera.updateProjectionMatrix();
+    controls.target.copy(center);
+    controls.update();
+  };
+  frame();
 
   // Back-to-front index sort for correct alpha. Throttled AND skipped when the
   // camera has not moved, so a static preview does not peg the main thread.
   const idxAttr = geo.getIndex();
   const dir = new THREE.Vector3();
+  const localCamera = new THREE.Vector3();
+  const inverseRotation = new THREE.Quaternion();
   const depth = new Float32Array(splat.count);
   const lastPos = new THREE.Vector3(Infinity, 0, 0);
   const lastQuat = new THREE.Quaternion(2, 0, 0, 0);
   let lastSort = 0;
   const sort = () => {
+    splatPoints.updateMatrixWorld();
     camera.getWorldDirection(dir);
-    const cx = camera.position.x;
-    const cy = camera.position.y;
-    const cz = camera.position.z;
+    splatPoints.getWorldQuaternion(inverseRotation).invert();
+    dir.applyQuaternion(inverseRotation);
+    localCamera.copy(camera.position);
+    splatPoints.worldToLocal(localCamera);
+    const cx = localCamera.x;
+    const cy = localCamera.y;
+    const cz = localCamera.z;
     for (let i = 0; i < splat.count; i++) {
       depth[i] =
         (splat.pos[i * 3] - cx) * dir.x +
@@ -166,7 +202,18 @@ function view(splat, mount) {
 
   const gizmo = new ViewHelper(camera, renderer.domElement);
   let gizmoOn = true;
-  buildPanel(mount, uniforms, splat.count, renderer, (on) => (gizmoOn = on));
+  buildPanel(
+    mount,
+    uniforms,
+    splat.count,
+    renderer,
+    (on) => (gizmoOn = on),
+    (convention) => {
+      splatPoints.quaternion.copy(CONVENTIONS[convention]);
+      frame();
+      sort();
+    }
+  );
   const onClick = (e) => gizmoOn && gizmo.handleClick(e);
   renderer.domElement.addEventListener('pointerup', onClick);
 
@@ -211,7 +258,7 @@ function view(splat, mount) {
   })(0);
 }
 
-function buildPanel(mount, uniforms, count, renderer, onGizmo) {
+function buildPanel(mount, uniforms, count, renderer, onGizmo, onConvention) {
   const panel = document.createElement('div');
   panel.className = 'ov3d-panel';
   const info = document.createElement('div');
@@ -228,6 +275,14 @@ function buildPanel(mount, uniforms, count, renderer, onGizmo) {
     onGizmo(on);
   };
   panel.appendChild(gizmo);
+  const coords = document.createElement('label');
+  coords.className = 'ov3d-slider';
+  coords.append('Coords');
+  const coordSelect = document.createElement('select');
+  for (const name of Object.keys(CONVENTIONS)) coordSelect.add(new Option(name, name));
+  coordSelect.onchange = () => onConvention(coordSelect.value);
+  coords.appendChild(coordSelect);
+  panel.appendChild(coords);
   panel.appendChild(slider('Size', 0.1, 4, 0.05, 1, (v) => (uniforms.uScale.value = v)));
   panel.appendChild(slider('Opacity', 0.1, 1, 0.02, 1, (v) => (uniforms.uOpacity.value = v)));
   panel.appendChild(slider('Falloff', 0, 1, 0.05, 1, (v) => (uniforms.uFalloff.value = v)));

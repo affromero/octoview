@@ -15,6 +15,7 @@ import {
   parseSog,
 } from '../extension/splat-decode.js';
 import { unzip } from '../extension/unzip.js';
+import { parseLcc } from '../extension/lcc-decode.js';
 import { zipSync } from 'fflate';
 
 const fixture = (name) => {
@@ -212,6 +213,50 @@ describe('parseGguf', () => {
 });
 
 describe('splat decoders', () => {
+  it('decodes an XGRIDS LCC metadata file with its index.bin and data.bin companions', () => {
+    const meta = new TextEncoder().encode(
+      JSON.stringify({
+        totalLevel: 1,
+        splats: [1],
+        attributes: [{ name: 'scale', min: [-2, -2, -2], max: [0, 0, 0] }],
+      })
+    );
+    const index = new Uint8Array(20);
+    const indexView = new DataView(index.buffer);
+    indexView.setInt32(4, 1, true);
+    indexView.setBigInt64(8, 0n, true);
+    indexView.setInt32(16, 32, true);
+    const data = new Uint8Array(32);
+    const dataView = new DataView(data.buffer);
+    dataView.setFloat32(0, 1.5, true);
+    dataView.setFloat32(4, -2.5, true);
+    dataView.setFloat32(8, 3.5, true);
+    data.set([255, 128, 0, 200], 12);
+    dataView.setUint16(16, 65535, true);
+    dataView.setUint16(18, 32768, true);
+    dataView.setUint16(20, 0, true);
+
+    const splat = parseLcc(meta, index, data);
+    expect(splat.count).toBe(1);
+    expect([...splat.pos]).toEqual([1.5, -2.5, 3.5]);
+    expect(splat.col[0]).toBe(1);
+    expect(splat.col[1]).toBeCloseTo(128 / 255);
+    expect(splat.col[2]).toBe(0);
+    expect(splat.col[3]).toBeCloseTo(200 / 255);
+    expect(splat.size[0]).toBeCloseTo(1);
+  });
+
+  it('decodes the committed LCC sample bundle', () => {
+    const splat = parseLcc(
+      fixture('lcc/meta.lcc'),
+      fixture('lcc/index.bin'),
+      fixture('lcc/data.bin')
+    );
+    expect(splat.count).toBe(4);
+    expect([...splat.pos.slice(0, 3)]).toEqual([0, 0, 0]);
+    expect(splat.col[0]).toBe(1);
+  });
+
   it('parses antimatter15 .splat records', () => {
     const buf = new ArrayBuffer(64); // two splats
     const dv = new DataView(buf);

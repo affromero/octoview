@@ -1,0 +1,22 @@
+{
+  "fileType": "Portable",
+  "totalLevel": 1,
+  "splats": [
+    4
+  ],
+  "attributes": [
+    {
+      "name": "scale",
+      "min": [
+        -4,
+        -4,
+        -4
+      ],
+      "max": [
+        -1,
+        -1,
+        -1
+      ]
+    }
+  ]
+}
