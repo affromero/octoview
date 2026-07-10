@@ -17,6 +17,7 @@ const VIRIDIS = [
   [253, 231, 37],
 ];
 export function colormap(t) {
+  if (!isFinite(t)) t = 0; // NaN/Inf (e.g. an all-NaN array) map to the low color
   const x = Math.max(0, Math.min(1, t)) * (VIRIDIS.length - 1);
   const i = Math.floor(x);
   const f = x - i;
@@ -149,9 +150,15 @@ function drawArray(a, mount, showName) {
   let hi = -Infinity;
   for (let i = 0; i < data.length; i++) {
     const v = data[i];
-    if (v < lo) lo = v;
-    if (v > hi) hi = v;
+    if (isFinite(v)) {
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    }
   }
+  if (lo === Infinity) {
+    lo = 0;
+    hi = 1;
+  } // empty or all-non-finite
   const meta = document.createElement('div');
   meta.className = 'ov-arr-meta';
   meta.textContent =

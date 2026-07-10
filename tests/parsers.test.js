@@ -110,7 +110,7 @@ describe('unzipNpz / unzip', () => {
   it('inflates DEFLATE zip entries (fflate) for a .splattie bundle', () => {
     const files = unzip(fixture('head.splattie'));
     expect(files.has('manifest.json')).toBe(true);
-    expect(files.has('base.ply')).toBe(true);
+    expect(files.has('splat.ply')).toBe(true);
     const manifest = JSON.parse(new TextDecoder().decode(files.get('manifest.json')));
     expect(manifest.format).toBe('splattie');
   });
@@ -122,6 +122,11 @@ describe('colormap', () => {
     expect(colormap(1).map(Math.round)).toEqual([253, 231, 37]);
     expect(colormap(-5)).toEqual(colormap(0));
     expect(colormap(9)).toEqual(colormap(1));
+  });
+
+  it('maps non-finite input to a safe color (all-NaN arrays do not throw)', () => {
+    expect(colormap(NaN)).toEqual(colormap(0));
+    expect(colormap(Infinity)).toEqual(colormap(0));
   });
 });
 
@@ -223,15 +228,31 @@ describe('splat decoders', () => {
     expect(s.col[3]).toBeCloseTo(128 / 255);
   });
 
-  it('detects a 3DGS ply vs a plain ply, and decodes it', () => {
+  it('detects a 3DGS ply vs a plain ply, and decodes the real head capture', () => {
     const splatPly = fixture('splat.ply');
     const pointPly = fixture('points.ply');
     expect(isPlySplat(splatPly)).toBe(true);
     expect(isPlySplat(pointPly)).toBe(false);
     const s = parsePlySplat(splatPly);
-    expect(s.count).toBe(6000);
+    expect(s.count).toBe(20018);
     // colors are sigmoid/SH-decoded into [0,1]
     for (let i = 0; i < s.col.length; i++) expect(s.col[i]).toBeGreaterThanOrEqual(0);
+  });
+
+  it('computes the data offset from bytes, not string length (multibyte header)', () => {
+    // A non-ASCII comment makes the byte length exceed the string length; a
+    // string-index offset would read the first vertex from the wrong place.
+    const ply = makePlySplat([{ x: 1, y: 2, z: 3 }], 'café résumé señor');
+    const s = parsePlySplat(ply);
+    expect([s.pos[0], s.pos[1], s.pos[2]]).toEqual([1, 2, 3]);
+  });
+
+  it('does not treat a plain ply as a splat just because a comment names the fields', () => {
+    const header =
+      'ply\nformat binary_little_endian 1.0\ncomment f_dc_0 scale_0 rot_0\nelement vertex 1\nproperty float x\nproperty float y\nproperty float z\nend_header\n';
+    const buf = new Uint8Array(header.length + 12);
+    buf.set(new TextEncoder().encode(header), 0);
+    expect(isPlySplat(buf.buffer)).toBe(false);
   });
 
   it('rejects an ASCII ply', () => {
@@ -243,6 +264,42 @@ describe('splat decoders', () => {
 
   it('unzips a .splattie bundle and renders its base ply', async () => {
     const s = await parseSplattie(fixture('head.splattie'));
-    expect(s.count).toBe(6000);
+    expect(s.count).toBe(20018);
   });
 });
+
+// Build a tiny binary 3DGS ply from vertex records (float props), optional comment.
+function makePlySplat(verts, comment) {
+  const props = [
+    'x',
+    'y',
+    'z',
+    'f_dc_0',
+    'f_dc_1',
+    'f_dc_2',
+    'opacity',
+    'scale_0',
+    'scale_1',
+    'scale_2',
+    'rot_0',
+    'rot_1',
+    'rot_2',
+    'rot_3',
+  ];
+  const headerStr =
+    'ply\nformat binary_little_endian 1.0\n' +
+    (comment ? `comment ${comment}\n` : '') +
+    `element vertex ${verts.length}\n` +
+    props.map((p) => `property float ${p}`).join('\n') +
+    '\nend_header\n';
+  const head = new TextEncoder().encode(headerStr);
+  const body = new ArrayBuffer(verts.length * props.length * 4);
+  const dv = new DataView(body);
+  verts.forEach((v, i) =>
+    props.forEach((p, k) => dv.setFloat32((i * props.length + k) * 4, v[p] || 0, true))
+  );
+  const out = new Uint8Array(head.length + body.byteLength);
+  out.set(head, 0);
+  out.set(new Uint8Array(body), head.length);
+  return out.buffer;
+}

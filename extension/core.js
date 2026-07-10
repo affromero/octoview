@@ -86,8 +86,11 @@
     for (const el of root.querySelectorAll('*')) {
       for (const attr of [...el.attributes]) {
         const n = attr.name.toLowerCase();
+        // Strip whitespace (tab/newline/CR) before the scheme check: browsers
+        // ignore it inside a URL, so `jav&#x09;ascript:` still executes otherwise.
+        const stripped = attr.value.replace(/\s+/g, '');
         if (n.startsWith('on')) el.removeAttribute(attr.name);
-        else if (/^(href|src|xlink:href)$/.test(n) && /^\s*javascript:/i.test(attr.value))
+        else if (/^(href|src|xlink:href)$/.test(n) && /^javascript:/i.test(stripped))
           el.removeAttribute(attr.name);
       }
     }

@@ -7,11 +7,37 @@ const C0 = 0.28209479177387814; // SH band-0 factor, f_dc -> base color
 const MAX_SPLATS = 800000; // ponytail: subsample beyond this to keep the sort snappy
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
-// Detect a 3DGS PLY (vs a mesh/point-cloud PLY) from its header text. A full-SH
-// PLY lists ~45 f_rest_* before scale/rot, so scan a generous window.
+// Locate the PLY header end in BYTES (a header comment may hold multi-byte chars,
+// so a decoded-string index would give the wrong binary data offset).
+function readPlyHeader(buf) {
+  const b = new Uint8Array(buf);
+  const lim = Math.min(b.length, 65536);
+  const M = [0x65, 0x6e, 0x64, 0x5f, 0x68, 0x65, 0x61, 0x64, 0x65, 0x72]; // "end_header"
+  for (let i = 0; i + M.length <= lim; i++) {
+    let hit = true;
+    for (let j = 0; j < M.length; j++)
+      if (b[i + j] !== M[j]) {
+        hit = false;
+        break;
+      }
+    if (!hit) continue;
+    let k = i + M.length;
+    while (k < lim && b[k] !== 0x0a) k++;
+    return { text: new TextDecoder().decode(b.subarray(0, i)), dataStart: k + 1 };
+  }
+  return null;
+}
+
+// Detect a 3DGS PLY (vs a mesh/point-cloud PLY): the gaussian fields must be
+// declared PROPERTIES of the vertex element, not just strings in a comment.
 export function isPlySplat(buf) {
-  const head = new TextDecoder().decode(new Uint8Array(buf, 0, Math.min(8192, buf.byteLength)));
-  return /f_dc_0/.test(head) && /scale_0/.test(head) && /rot_0/.test(head);
+  const h = readPlyHeader(buf);
+  return (
+    !!h &&
+    /property\s+\S+\s+f_dc_0\b/.test(h.text) &&
+    /property\s+\S+\s+scale_0\b/.test(h.text) &&
+    /property\s+\S+\s+rot_0\b/.test(h.text)
+  );
 }
 
 // antimatter15 .splat: 32 bytes/splat — pos(3 f32), scale(3 f32), rgba(4 u8), quat(4 u8).
@@ -41,11 +67,10 @@ export function parseSplatBin(buf) {
 
 // 3DGS PLY (binary_little_endian): x y z … f_dc_0..2 … opacity scale_0..2 rot_0..3.
 export function parsePlySplat(buf) {
-  const bytes = new Uint8Array(buf);
-  const scan = new TextDecoder().decode(bytes.subarray(0, Math.min(65536, bytes.length)));
-  const end = scan.indexOf('end_header');
-  if (end < 0) throw new Error('PLY header not found (or larger than 64KB)');
-  const dataStart = scan.indexOf('\n', end) + 1;
+  const h = readPlyHeader(buf);
+  if (!h) throw new Error('PLY header not found (or larger than 64KB)');
+  const scan = h.text;
+  const dataStart = h.dataStart;
   const total = +/element vertex (\d+)/.exec(scan)[1];
   const little = /binary_little_endian/.test(scan);
   if (!/format\s+binary/.test(scan)) throw new Error('ASCII PLY splats not supported');
@@ -71,7 +96,7 @@ export function parsePlySplat(buf) {
   };
   const props = [];
   let inVertex = false;
-  for (const line of scan.slice(0, end).split('\n')) {
+  for (const line of scan.split('\n')) {
     const t = line.trim();
     if (t.startsWith('element ')) inVertex = /^element\s+vertex\b/.test(t);
     else if (inVertex && t.startsWith('property ')) {

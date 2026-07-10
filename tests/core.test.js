@@ -61,6 +61,22 @@ describe('pickRawUrl', () => {
       'https://github.com/o/r/raw/dev/x/notes.md'
     );
   });
+  it('ignores an unrelated raw link and picks the one for the current blob', () => {
+    const doc = document.createElement('div');
+    doc.innerHTML =
+      '<a href="https://github.com/o/r/raw/main/OTHER.html">stray</a>' +
+      '<a href="https://github.com/o/r/raw/main/f.html">Raw</a>';
+    expect(O.pickRawUrl(doc, 'https://github.com/o/r/blob/main/f.html')).toBe(
+      'https://github.com/o/r/raw/main/f.html'
+    );
+  });
+  it('constructs the raw path when only unrelated raw links exist', () => {
+    const doc = document.createElement('div');
+    doc.innerHTML = '<a href="https://github.com/o/r/raw/main/OTHER.html">stray</a>';
+    expect(O.pickRawUrl(doc, 'https://github.com/o/r/blob/main/f.html')).toBe(
+      'https://github.com/o/r/raw/main/f.html'
+    );
+  });
 });
 
 describe('renderNotebook', () => {
@@ -87,6 +103,23 @@ describe('renderNotebook', () => {
     // interactive html output is routed to the sandbox-frame factory
     expect(mount.querySelector('.stub-html').dataset.html).toContain('id="plot"');
     expect(mount.querySelector('img.ov-nb-img').src).toBe('data:image/png;base64,AAAA');
+  });
+
+  it('sanitizes active content from untrusted notebook markdown', () => {
+    const mount = document.createElement('div');
+    const nb = {
+      cells: [
+        {
+          cell_type: 'markdown',
+          source: [
+            '<a id="lnk" href="jav&#x09;ascript:alert(1)">x</a><img id="im" src="x" onerror="alert(1)">',
+          ],
+        },
+      ],
+    };
+    O.renderNotebook(nb, mount, stubFrame);
+    expect(mount.querySelector('#lnk').getAttribute('href')).toBeNull();
+    expect(mount.querySelector('#im').getAttribute('onerror')).toBeNull();
   });
 
   it('strips ANSI codes from error tracebacks', () => {
