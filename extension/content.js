@@ -7,6 +7,8 @@
 // inline scripts do not run in Safari (a platform limit) but self-contained
 // static HTML shows. core.js (loaded before) exposes `octoview`; marked is loaded
 // alongside for notebook markdown.
+// Safari and Firefox define `browser`; Chrome only `chrome` (same MV3 API).
+globalThis.browser ??= globalThis.chrome;
 const O = octoview;
 const BTN_ID = 'octoview-btn';
 const PANE_ID = 'octoview-pane';
@@ -236,7 +238,12 @@ function reportFrame(html) {
     if (e.source !== f.contentWindow || !e.data || e.data.type !== 'ov-live-ready') return;
     clearTimeout(fallback);
     removeEventListener('message', onReady);
-    e.source.postMessage({ type: 'ov-report', html }, new URL(viewerUrl).origin);
+    // targetOrigin '*', not the extension origin: in the Chrome build
+    // viewer.html is a manifest sandbox page, whose origin is opaque ("null"),
+    // so a targeted post would be silently dropped. Safe — the message goes
+    // only to our own just-created frame, which holds no secrets and verifies
+    // the sender's origin itself.
+    e.source.postMessage({ type: 'ov-report', html }, '*');
   }
   addEventListener('message', onReady);
   return f;
