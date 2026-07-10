@@ -491,3 +491,17 @@ describe('spz v4 (zstd stream container)', () => {
     expect(() => parseSpz(buf.buffer)).toThrow();
   });
 });
+
+describe('arrow tables', () => {
+  it('reads metrics.arrow (same dataset as metrics.parquet)', async () => {
+    const { tableFromIPC } = await import('../extension/vendor/flechette.esm.js');
+    const t = tableFromIPC(new Uint8Array(fixture('metrics.arrow')));
+    expect(t.numRows).toBe(500);
+    expect(t.names).toEqual(['id', 'split', 'loss', 'accuracy', 'label']);
+    // first row, known from the parquet fixture the file was converted from
+    expect(t.getChild('label').at(0)).toBe('cat');
+    expect(t.getChild('split').at(0)).toBe('test');
+    expect(t.getChild('loss').at(0)).toBeCloseTo(0.1274, 4);
+    expect(t.getChild('accuracy').at(499)).toBeGreaterThan(0);
+  });
+});

@@ -50,7 +50,7 @@ try {
   } else if (ext === '.npy' || ext === '.npz') {
     const { renderArray } = await import('/extension/render-array.js');
     await renderArray(buf, mount, ext);
-  } else if (ext === '.parquet') {
+  } else if (['.parquet', '.arrow', '.feather', '.ipc'].includes(ext)) {
     const { renderTable } = await import('/extension/render-table.js');
     await renderTable(buf, mount, ext);
   } else if (ext === '.safetensors' || ext === '.gguf') {

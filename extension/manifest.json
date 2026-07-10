@@ -33,6 +33,7 @@
         "vendor/splattie-widget.esm.js",
         "vendor/plotly.esm.js",
         "vendor/hyparquet.esm.js",
+        "vendor/flechette.esm.js",
         "vendor/fflate.esm.js"
       ],
       "matches": ["https://github.com/*"]
