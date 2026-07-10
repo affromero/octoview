@@ -111,25 +111,25 @@ if (box) {
 }
 await hold(4);
 
-// Play with the Opacity slider: fade the splat down and back up.
-const opacity = page
-  .locator('#octoview-pane label.ov3d-slider', { hasText: 'Opacity' })
+// Play with the Variance slider: collapse the oriented gaussians down to their
+// full-intensity means (revealing the raw point cloud) and back to a solid
+// surface — the most legible of the controls, and unmistakably different.
+const variance = page
+  .locator('#octoview-pane label.ov3d-slider', { hasText: 'Variance' })
   .locator('input[type="range"]');
-const setOpacity = (v) =>
-  opacity.evaluate((el, val) => {
+const setVariance = (v) =>
+  variance.evaluate((el, val) => {
     el.value = String(val);
     el.dispatchEvent(new Event('input', { bubbles: true }));
   }, v);
-// Fade all the way down to the slider floor so the solid surface dissolves into
-// a translucent cloud of the underlying gaussians, then back up — a clear reveal.
-if (await opacity.count()) {
-  for (let v = 1; v >= 0.08; v -= 0.04) {
-    await setOpacity(v);
+if (await variance.count()) {
+  for (let v = 1; v >= 0; v -= 0.05) {
+    await setVariance(v);
     await snap();
   }
   await hold(6);
-  for (let v = 0.08; v <= 1; v += 0.04) {
-    await setOpacity(v);
+  for (let v = 0; v <= 1; v += 0.05) {
+    await setVariance(v);
     await snap();
   }
 }

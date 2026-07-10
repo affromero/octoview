@@ -30,7 +30,7 @@ _Gaussian splats, meshes, point clouds, depth and EXR, HTML reports, notebooks, 
 
 ![octoview previewing a Gaussian splat inline on a GitHub blob page](assets/demo.gif)
 
-_Click **Preview** on any file GitHub serves as raw bytes. Here: a 3D Gaussian splat, rendered and orbitable in place._
+_Click **Preview** on any file GitHub serves as raw bytes. Here: a 3D Gaussian splat, orbited in place, then collapsed to its full-intensity means and back with the Variance slider._
 
 </div>
 

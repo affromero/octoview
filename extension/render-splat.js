@@ -158,7 +158,7 @@ in float splatIndex;  // splat drawn by this instance (sorted order)
 uniform highp sampler2D uData;
 uniform mat4 modelViewMatrix, projectionMatrix;
 uniform vec2 uViewport;
-uniform float uScale, uFalloff;
+uniform float uScale, uFalloff, uVariance;
 out vec4 vColor;
 out vec2 vPos;
 void main(){
@@ -182,7 +182,11 @@ void main(){
     0.0, 0.0, 0.0);
   mat3 W = mat3(modelViewMatrix);
   mat3 T = W * J;
-  mat3 cov2d = transpose(T) * Vrk * T;
+  // uVariance shrinks each gaussian's spread toward its mean: at 1 the full
+  // oriented ellipse, at 0 it collapses (only the constant low-pass survives) to
+  // a ~1px dot — the splat centers as a point cloud (see the fragment shader,
+  // which drives those collapsed means to full intensity).
+  mat3 cov2d = transpose(T) * Vrk * T * uVariance;
   cov2d[0][0] += 0.3; cov2d[1][1] += 0.3; // low-pass so a splat is never sub-pixel
   float mid = 0.5*(cov2d[0][0]+cov2d[1][1]);
   float rad = length(vec2((cov2d[0][0]-cov2d[1][1])*0.5, cov2d[0][1]));
@@ -203,12 +207,14 @@ void main(){
 const FRAGMENT = `
 precision highp float;
 in vec4 vColor; in vec2 vPos;
-uniform float uOpacity;
+uniform float uOpacity, uVariance;
 out vec4 outColor;
 void main(){
   float A = -dot(vPos, vPos);
   if (A < -4.0) discard;
-  float a = exp(A) * vColor.a * uOpacity;
+  // As variance collapses to means (uVariance -> 0), drive alpha to full so the
+  // means read as full-intensity points, not the splat's own (often low) opacity.
+  float a = exp(A) * mix(1.0, vColor.a, uVariance) * uOpacity;
   if (a < 0.004) discard;
   outColor = vec4(vColor.rgb, a);
 }`;
@@ -234,6 +240,7 @@ function view(splat, mount) {
     uScale: { value: 1 },
     uOpacity: { value: 1 },
     uFalloff: { value: 1 },
+    uVariance: { value: 1 },
   };
   const material = new THREE.RawShaderMaterial({
     glslVersion: THREE.GLSL3,
@@ -421,6 +428,9 @@ function buildPanel(mount, uniforms, count, renderer, onGizmo, onConvention) {
   coords.appendChild(coordSelect);
   panel.appendChild(coords);
   panel.appendChild(slider('Size', 0.1, 4, 0.05, 1, (v) => (uniforms.uScale.value = v)));
+  // Variance: 1 = full oriented gaussians; drag toward 0 to shrink each splat to
+  // its full-intensity mean, revealing the underlying point cloud.
+  panel.appendChild(slider('Variance', 0, 1, 0.01, 1, (v) => (uniforms.uVariance.value = v)));
   panel.appendChild(slider('Opacity', 0.05, 1, 0.01, 1, (v) => (uniforms.uOpacity.value = v)));
   // Falloff sharpens/softens the gaussian edge (divides the sample radius): 1 is
   // the true gaussian, lower makes crisper cores, higher a softer cloud.
