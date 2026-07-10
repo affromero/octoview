@@ -8,10 +8,10 @@
 //     reports work — the same design, granted by a different mechanism.
 //   - the Web Store requires PNG icons, rendered here from assets/logo.svg
 //     with the repo's Playwright Chromium.
-import { chromium } from 'playwright';
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
+import { rasterizeIcons } from './icons.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const OUT = join(ROOT, 'build', 'chrome');
@@ -20,23 +20,7 @@ const SIZES = [16, 32, 48, 128];
 await rm(OUT, { recursive: true, force: true });
 await mkdir(OUT, { recursive: true });
 await cp(join(ROOT, 'extension'), OUT, { recursive: true });
-
-// Icons: rasterize the SVG logo at each size.
-const svg = await readFile(join(ROOT, 'assets', 'logo.svg'), 'utf8');
-await mkdir(join(OUT, 'icons'), { recursive: true });
-const browser = await chromium.launch();
-const page = await browser.newPage();
-for (const size of SIZES) {
-  await page.setViewportSize({ width: size, height: size });
-  await page.setContent(
-    `<style>*{margin:0}svg{display:block;width:${size}px;height:${size}px}</style>${svg}`
-  );
-  await writeFile(
-    join(OUT, 'icons', `icon${size}.png`),
-    await page.screenshot({ omitBackground: true })
-  );
-}
-await browser.close();
+await rasterizeIcons(join(OUT, 'icons'), SIZES);
 
 const manifest = JSON.parse(await readFile(join(OUT, 'manifest.json'), 'utf8'));
 // Chrome refuses to load ANY extension whose extension_pages CSP contains
