@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>octoview sample · HTML report</title>
+    <title>octoview sample · interactive HTML report</title>
     <style>
       body {
         margin: 0;
@@ -33,21 +33,70 @@
       .num {
         text-align: right;
       }
-      figure {
-        margin: 20px 0 0;
-      }
       figcaption {
         color: #59636e;
         font-size: 13px;
         margin-top: 6px;
+      }
+      .legend {
+        display: flex;
+        gap: 12px;
+        margin: 18px 0 6px;
+        font-size: 13px;
+      }
+      .legend button {
+        border: 1px solid #d1d9e0;
+        background: #fff;
+        border-radius: 6px;
+        padding: 3px 10px;
+        cursor: pointer;
+        font: inherit;
+        color: #8c959f;
+      }
+      .legend button.on {
+        color: #1f2328;
+      }
+      .legend .dot {
+        display: inline-block;
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        margin-right: 5px;
+        vertical-align: middle;
+      }
+      #chart {
+        display: block;
+        width: 640px;
+        max-width: 100%;
+        height: 260px;
+        background: #f6f8fa;
+        border-radius: 8px;
+        cursor: crosshair;
+      }
+      #tip {
+        position: fixed;
+        pointer-events: none;
+        background: #1f2328;
+        color: #fff;
+        font:
+          12px/1.35 ui-monospace,
+          monospace;
+        padding: 5px 8px;
+        border-radius: 6px;
+        opacity: 0;
+        transition: opacity 0.08s;
+        white-space: nowrap;
       }
     </style>
   </head>
   <body>
     <h1>Training report</h1>
     <p>
-      GitHub shows this file's raw source. octoview renders it in place, so self-contained HTML
-      content (headings, tables, and inline SVG charts) shows exactly as authored.
+      GitHub shows this file's raw source. octoview renders it in place and runs its scripts, so the
+      chart below is <b>interactive</b>: hover it for per-epoch values, and toggle the series.
+    </p>
+    <p style="font-size: 13px; color: #59636e">
+      report scripts: <b id="live-badge">not executed (static render)</b>
     </p>
 
     <table>
@@ -73,43 +122,108 @@
       </tbody>
     </table>
 
-    <figure>
-      <svg width="480" height="180" viewBox="0 0 480 180" role="img" aria-label="loss curve">
-        <rect x="0" y="0" width="480" height="180" fill="#f6f8fa" rx="8" />
-        <line x1="40" y1="150" x2="460" y2="150" stroke="#d1d9e0" />
-        <line x1="40" y1="20" x2="40" y2="150" stroke="#d1d9e0" />
-        <polyline
-          fill="none"
-          stroke="#2ea043"
-          stroke-width="2.5"
-          points="40,40 75,70 110,92 145,105 180,118 215,126 250,132 285,137 320,140 355,143 390,145 425,146"
-        />
-        <text x="46" y="34" font-size="12" fill="#59636e">loss</text>
-      </svg>
-      <figcaption>Validation loss over 12 epochs (static inline SVG).</figcaption>
-    </figure>
+    <div class="legend">
+      <button data-s="loss" class="on">
+        <span class="dot" style="background: #0969da"></span>loss
+      </button>
+      <button data-s="acc" class="on">
+        <span class="dot" style="background: #1a7f37"></span>accuracy
+      </button>
+    </div>
+    <canvas id="chart" width="1280" height="520"></canvas>
+    <figcaption>Validation loss and accuracy over 12 epochs. Hover for values.</figcaption>
+    <div id="tip"></div>
 
-    <figure>
-      <p id="live-badge" style="font-size: 13px; color: #59636e">
-        report scripts: <b>not executed</b> (static render)
-      </p>
-      <canvas
-        id="live-chart"
-        width="480"
-        height="120"
-        style="background: #f6f8fa; border-radius: 8px"
-      ></canvas>
-      <figcaption>Script-drawn chart — blank means the report's scripts did not run.</figcaption>
-    </figure>
     <script>
+      const loss = [0.92, 0.61, 0.44, 0.33, 0.26, 0.21, 0.17, 0.14, 0.12, 0.1, 0.09, 0.081];
+      const acc = [0.52, 0.68, 0.77, 0.83, 0.87, 0.9, 0.915, 0.926, 0.935, 0.941, 0.945, 0.947];
+      const cv = document.getElementById('chart');
+      const ctx = cv.getContext('2d');
+      const tip = document.getElementById('tip');
+      const W = cv.width;
+      const H = cv.height;
+      const PAD = 64;
+      const n = loss.length;
+      const show = { loss: true, acc: true };
+      let hover = -1;
+
+      // Flips only when the report's scripts actually run (live viewer, not the
+      // static fallback where it stays "not executed").
       document.getElementById('live-badge').innerHTML =
-        'report scripts: <b style="color:#1a7f37">LIVE</b>';
-      const ctx = document.getElementById('live-chart').getContext('2d');
-      ctx.fillStyle = '#2ea043';
-      for (let i = 0; i < 24; i++) {
-        const h = 18 + 90 * Math.abs(Math.sin(i / 3.2));
-        ctx.fillRect(12 + i * 19, 110 - h, 13, h);
+        '<span style="color:#1a7f37">LIVE (interactive)</span>';
+
+      const X = (i) => PAD + ((W - PAD * 1.5) * i) / (n - 1);
+      const Yl = (v) => H - PAD - (H - PAD * 1.8) * v; // loss maps 0..1
+      const Ya = (v) => H - PAD - (H - PAD * 1.8) * ((v - 0.4) / 0.6); // accuracy 0.4..1
+
+      function series(data, Y, color) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        data.forEach((v, i) => (i ? ctx.lineTo(X(i), Y(v)) : ctx.moveTo(X(i), Y(v))));
+        ctx.stroke();
+        data.forEach((v, i) => {
+          ctx.fillStyle = i === hover ? '#1f2328' : color;
+          ctx.beginPath();
+          ctx.arc(X(i), Y(v), i === hover ? 9 : 5, 0, 7);
+          ctx.fill();
+        });
       }
+
+      function draw() {
+        ctx.clearRect(0, 0, W, H);
+        ctx.strokeStyle = '#e6ebf1';
+        ctx.lineWidth = 2;
+        for (let g = 0; g <= 4; g++) {
+          const y = PAD + ((H - PAD * 1.8) * g) / 4;
+          ctx.beginPath();
+          ctx.moveTo(PAD, y);
+          ctx.lineTo(W - PAD * 0.5, y);
+          ctx.stroke();
+        }
+        if (hover >= 0) {
+          ctx.strokeStyle = '#c9d1d9';
+          ctx.beginPath();
+          ctx.moveTo(X(hover), PAD * 0.5);
+          ctx.lineTo(X(hover), H - PAD);
+          ctx.stroke();
+        }
+        if (show.loss) series(loss, Yl, '#0969da');
+        if (show.acc) series(acc, Ya, '#1a7f37');
+        ctx.fillStyle = '#8c959f';
+        ctx.font = '22px -apple-system, sans-serif';
+        ctx.fillText('epoch', W / 2 - 34, H - 20);
+      }
+
+      cv.addEventListener('mousemove', (e) => {
+        const r = cv.getBoundingClientRect();
+        const cx = ((e.clientX - r.left) / r.width) * W;
+        hover = Math.max(0, Math.min(n - 1, Math.round(((cx - PAD) / (W - PAD * 1.5)) * (n - 1))));
+        draw();
+        tip.style.opacity = 1;
+        tip.style.left = e.clientX + 14 + 'px';
+        tip.style.top = e.clientY - 10 + 'px';
+        tip.innerHTML =
+          'epoch ' +
+          (hover + 1) +
+          '<br>loss ' +
+          loss[hover].toFixed(3) +
+          '<br>acc  ' +
+          acc[hover].toFixed(3);
+      });
+      cv.addEventListener('mouseleave', () => {
+        hover = -1;
+        tip.style.opacity = 0;
+        draw();
+      });
+      document.querySelectorAll('.legend button').forEach((b) => {
+        b.onclick = () => {
+          show[b.dataset.s] = !show[b.dataset.s];
+          b.classList.toggle('on', show[b.dataset.s]);
+          draw();
+        };
+      });
+      draw();
     </script>
   </body>
 </html>
