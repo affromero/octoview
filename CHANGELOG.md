@@ -6,6 +6,8 @@ new version, commits, and tags it.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-07-11
+
 ## [1.0.0] - 2026-07-10
 
 First public release.
