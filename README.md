@@ -14,7 +14,7 @@ _Gaussian splats, meshes, point clouds, depth and EXR, HTML reports, notebooks, 
 [![Security Policy](https://img.shields.io/badge/security-policy-blue)](SECURITY.md)
 [![Dependabot](https://img.shields.io/badge/Dependabot-enabled-025E8C?logo=dependabot&logoColor=white)](.github/dependabot.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.0-blue)](https://github.com/affromero/octoview/releases/tag/v0.1.0)
+[![Version](https://img.shields.io/github/v/release/affromero/octoview?label=version&color=blue)](https://github.com/affromero/octoview/releases/latest)
 [![Tests](https://img.shields.io/badge/tests-unit_%2B_webkit_e2e-brightgreen)](test/render.e2e.mjs)
 [![Mac App Store](https://img.shields.io/badge/Mac_App_Store-download-0D96F6?logo=appstore&logoColor=white)](https://apps.apple.com/app/id6789632370)
 [![Safari](https://img.shields.io/badge/Safari-Web_Extension-006CFF?logo=safari&logoColor=white)](https://developer.apple.com/documentation/safariservices/safari_web_extensions)
