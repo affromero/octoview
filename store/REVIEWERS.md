@@ -39,9 +39,9 @@ Every bundle is produced by `esbuild` from a lockfile-pinned npm dependency in
 | `vendor/plotly.esm.js`    | `plotly.js-cartesian-dist-min`                          |
 | `vendor/fflate.esm.js`    | `fflate` (+ `fzstd`)                                    |
 
-The Firefox build does **not** ship the Spark or splattie-widget bundles (they
-exceed the linter's file-size limit and cannot run under Firefox's CSP anyway);
-`scripts/build-firefox.mjs` strips them.
+Every listed bundle ships as-is; there are no browser-specific bundle removals.
+Splats render via a native WebGL2 renderer in the content script's isolated
+world (`render-splat.js`), so Firefox needs no worker, blob, or WASM bundle.
 
 ## How the Firefox manifest differs from the source manifest
 
@@ -49,10 +49,9 @@ exceed the linter's file-size limit and cannot run under Firefox's CSP anyway);
 patches it for Firefox:
 
 - Content-security-policy `extension_pages` is set to the strict minimum
-  (`script-src 'self' 'wasm-unsafe-eval'; connect-src 'none'; object-src 'none'`).
+  (`script-src 'self'; connect-src 'none'; object-src 'none'`).
 - `browser_specific_settings.gecko` is added (id, `strict_min_version`,
   `data_collection_permissions: { required: ['none'] }`).
-- The Spark bundles are removed from `web_accessible_resources`.
 
 ## Data collection
 
