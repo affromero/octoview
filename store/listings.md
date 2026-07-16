@@ -41,7 +41,7 @@ request to any non-GitHub host.
 >
 > It previews 24 formats that GitHub shows as raw bytes or not at all:
 >
-> • 3D Gaussian splats: .splat, .spz (v1-v4), .ksplat, .sog, 3DGS .ply, .splattie
+> • 3D Gaussian splats: .splat, .spz (v1-v4), .ksplat, .sog, .lcc, 3DGS .ply
 > • Meshes and point clouds: .glb, .gltf, .obj, .ply, .pcd
 > • HTML reports: Plotly, ydata-profiling, W&B exports, with the report's own
 > charts running live in a sandbox
@@ -95,7 +95,7 @@ request to any non-GitHub host.
 >
 > It previews the ML and data formats GitHub serves as raw bytes or not at all:
 >
-> - 3D Gaussian splats: .splat, .spz (v1-v4), .ksplat, .sog, 3DGS .ply, .splattie
+> - 3D Gaussian splats: .splat, .spz (v1-v4), .ksplat, .sog, .lcc, 3DGS .ply
 > - Meshes and point clouds: .glb, .gltf, .obj, .ply, .pcd
 > - HTML reports (Plotly, ydata-profiling, W&B) with their charts running live
 > - Jupyter notebooks, keeping the interactive outputs GitHub strips
@@ -148,7 +148,7 @@ source package with exact build instructions is provided separately. See
 rebuilt from a lockfile-pinned npm dependency by `scripts/vendor.sh`; nothing is
 fetched from a CDN.
 
-**Known limitation to disclose:** the `.rad` splat format renders only through the
-bundled Spark viewer, which requires blob-URL workers that Firefox's extension-page
-CSP does not permit, so `.rad` previews are unavailable on Firefox (every other
-format works). Live HTML reports fall back to a static render for the same reason.
+**Known limitation to disclose:** Firefox's extension pages have no sandbox key,
+so live HTML reports fall back to a static render on Firefox; every splat and
+data format renders identically to Chrome (splats use a native WebGL2 renderer in
+the content script, so no blob-URL worker or WASM is needed).
