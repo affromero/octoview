@@ -20,6 +20,7 @@ const SIZES = [16, 32, 48, 128];
 await rm(OUT, { recursive: true, force: true });
 await mkdir(OUT, { recursive: true });
 await cp(join(ROOT, 'extension'), OUT, { recursive: true });
+await rm(join(OUT, 'vendor', '.gitkeep'), { force: true }); // git-only placeholder
 await rasterizeIcons(join(OUT, 'icons'), SIZES);
 
 const manifest = JSON.parse(await readFile(join(OUT, 'manifest.json'), 'utf8'));
