@@ -16,6 +16,8 @@
     "build:firefox": "node scripts/build-firefox.mjs",
     "test:firefox": "npm run build:firefox && npx --yes addons-linter build/firefox",
     "build:amo-source": "node scripts/build-amo-source.mjs",
+    "release:chrome": "npm run build:chrome && npx --yes chrome-webstore-upload-cli@3 upload --source build/octoview-chrome.zip --auto-publish",
+    "release:firefox": "npm run build:firefox && npm run build:amo-source && npx --yes web-ext@8 sign --channel listed --source-dir build/firefox --upload-source-code build/octoview-amo-source.zip --artifacts-dir build",
     "bump": "node scripts/bump.mjs",
     "screenshots": "npm run build:chrome && node scripts/screenshots.mjs",
     "demo": "npm run build:chrome && node scripts/demo-gif.mjs",

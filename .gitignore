@@ -11,3 +11,6 @@ xcuserdata/
 node_modules/
 coverage/
 test-results
+
+# store-upload credentials (see .env.example)
+.env
