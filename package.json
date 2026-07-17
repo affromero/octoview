@@ -40,7 +40,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@uwdata/flechette": "^2.5.0",
-    "@vitest/coverage-v8": "^4.1.9",
+    "@vitest/coverage-v8": "^4.1.10",
     "esbuild": "^0.28.1",
     "eslint": "^10.6.0",
     "fflate": "^0.8.3",
@@ -50,10 +50,10 @@
     "hyparquet": "^1.26.2",
     "jsdom": "^29.1.1",
     "lint-staged": "^17.0.8",
-    "marked": "^18.0.5",
+    "marked": "^18.0.6",
     "playwright": "^1.61.1",
     "plotly.js-cartesian-dist-min": "^3.7.0",
-    "prettier": "^3.9.4",
+    "prettier": "^3.9.5",
     "three": "^0.185.1",
     "vitest": "^4.1.9"
   }
