@@ -256,7 +256,7 @@ The genuinely comparable tools are a handful of single-purpose renderers, all na
 
 | Browser                                                                                     | Everything except reports |   Gaussian splats    |  Live HTML reports   | Availability                                                                                    |
 | ------------------------------------------------------------------------------------------- | :-----------------------: | :------------------: | :------------------: | ----------------------------------------------------------------------------------------------- |
-| ![Safari](https://img.shields.io/badge/Safari-1B88CA?logo=safari&logoColor=white)           |          native           | native (anisotropic) | live (unsafe-inline) | App Store                                                                                       |
+| ![Safari](https://img.shields.io/badge/Safari-1B88CA?logo=safari&logoColor=white)           |          native           | native (anisotropic) | live (unsafe-inline) | [App Store](https://apps.apple.com/app/id6789632370)                                            |
 | ![Chrome](https://img.shields.io/badge/Chrome-4285F4?logo=googlechrome&logoColor=white)     |          native           | native (anisotropic) | live (sandbox page)  | [Web Store](https://chromewebstore.google.com/detail/octoview/oajfeecdhdnkfllcfihdjadcgbbdddem) |
 | ![Firefox](https://img.shields.io/badge/Firefox-FF7139?logo=firefoxbrowser&logoColor=white) |          native           | native (anisotropic) |     static frame     | AMO (planned)                                                                                   |
 
