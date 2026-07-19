@@ -18,6 +18,7 @@ _Gaussian splats, meshes, point clouds, depth and EXR, HTML reports, notebooks, 
 [![Tests](https://img.shields.io/badge/tests-unit_%2B_webkit_e2e-brightgreen)](test/render.e2e.mjs)
 [![Mac App Store](https://img.shields.io/badge/Mac_App_Store-download-0D96F6?logo=appstore&logoColor=white)](https://apps.apple.com/app/id6789632370)
 [![Chrome Web Store](https://img.shields.io/chrome-web-store/v/oajfeecdhdnkfllcfihdjadcgbbdddem?label=Chrome%20Web%20Store&logo=googlechrome&logoColor=white&color=4285F4)](https://chromewebstore.google.com/detail/octoview/oajfeecdhdnkfllcfihdjadcgbbdddem)
+[![Firefox Add-on](https://img.shields.io/amo/v/octoview?label=Firefox%20Add-on&logo=firefoxbrowser&logoColor=white&color=FF7139)](https://addons.mozilla.org/firefox/addon/octoview/)
 [![Safari](https://img.shields.io/badge/Safari-Web_Extension-006CFF?logo=safari&logoColor=white)](https://developer.apple.com/documentation/safariservices/safari_web_extensions)
 [![Manifest v3](https://img.shields.io/badge/manifest-v3-8250df)](extension/manifest.json)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/affromero/octoview/pulls)
@@ -258,7 +259,7 @@ The genuinely comparable tools are a handful of single-purpose renderers, all na
 | ------------------------------------------------------------------------------------------- | :-----------------------: | :------------------: | :------------------: | ----------------------------------------------------------------------------------------------- |
 | ![Safari](https://img.shields.io/badge/Safari-1B88CA?logo=safari&logoColor=white)           |          native           | native (anisotropic) | live (unsafe-inline) | [App Store](https://apps.apple.com/app/id6789632370)                                            |
 | ![Chrome](https://img.shields.io/badge/Chrome-4285F4?logo=googlechrome&logoColor=white)     |          native           | native (anisotropic) | live (sandbox page)  | [Web Store](https://chromewebstore.google.com/detail/octoview/oajfeecdhdnkfllcfihdjadcgbbdddem) |
-| ![Firefox](https://img.shields.io/badge/Firefox-FF7139?logo=firefoxbrowser&logoColor=white) |          native           | native (anisotropic) |     static frame     | AMO (planned)                                                                                   |
+| ![Firefox](https://img.shields.io/badge/Firefox-FF7139?logo=firefoxbrowser&logoColor=white) |          native           | native (anisotropic) |     static frame     | [AMO](https://addons.mozilla.org/firefox/addon/octoview/)                                       |
 
 Splats and every non-report renderer behave identically across all three — they run in the content
 script's isolated world with no relaxed CSP. The only difference is live HTML reports: Firefox has no
