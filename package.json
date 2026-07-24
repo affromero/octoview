@@ -42,7 +42,7 @@
     "@uwdata/flechette": "^2.5.0",
     "@vitest/coverage-v8": "^4.1.10",
     "esbuild": "^0.28.1",
-    "eslint": "^10.6.0",
+    "eslint": "^10.7.0",
     "fflate": "^0.8.3",
     "fzstd": "^0.1.1",
     "globals": "^17.7.0",
