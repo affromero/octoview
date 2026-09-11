@@ -55,6 +55,6 @@
     "plotly.js-cartesian-dist-min": "^3.7.0",
     "prettier": "^3.9.6",
     "three": "^0.185.1",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.11"
   }
 }
