@@ -26,6 +26,7 @@
       "resources": [
         "viewer.html",
         "render3d.js",
+        "render-file.js",
         "render-array.js",
         "render-table.js",
         "render-model.js",

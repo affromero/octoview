@@ -33,6 +33,21 @@ export default [
     languageOptions: { sourceType: 'module' },
   },
   {
+    files: ['vscode/**/*.js', 'test/vscode-host.cjs'],
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: 'commonjs',
+      globals: globals.node,
+    },
+  },
+  {
+    files: ['vscode/webview.js'],
+    languageOptions: {
+      sourceType: 'module',
+      globals: { ...globals.browser, acquireVsCodeApi: 'readonly' },
+    },
+  },
+  {
     // Tests, build scripts, config: ESM on Node + jsdom, plus the browser render harness.
     files: [
       'tests/**/*.js',

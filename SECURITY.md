@@ -32,6 +32,20 @@ holds these invariants:
   decompression output (gzip/zstd/zip bombs), and bounds every file-driven loop,
   so a crafted file fails fast instead of hanging or OOM-ing the tab.
 
+## VS Code extension
+
+The desktop extension opens workspace files through a read-only custom editor.
+The host reads the selected file and, for LCC, only its fixed `index.bin` and
+`data.bin` siblings. Webview messages cannot request arbitrary paths or commands.
+Normal reads and each companion are capped at 64 MiB. Local model reads stop at
+32 MiB; other filesystem providers reject models larger than that limit.
+
+The webview's resource roots contain only packaged renderer assets. Its CSP
+blocks external network requests and inline scripts. Reports and notebook HTML
+outputs use opaque-origin sandboxed frames and inherit that policy. They cannot
+read workspace files or access the private VS Code message bridge. Notebook
+Plotly charts use the bundled renderer. There are no uploads or telemetry.
+
 ## Code and dependency standards
 
 - **No secrets in the repo.** Gitleaks scans every push and PR.

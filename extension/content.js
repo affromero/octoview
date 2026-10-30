@@ -12,28 +12,9 @@ globalThis.browser ??= globalThis.chrome;
 const O = octoview;
 const BTN_ID = 'octoview-btn';
 const PANE_ID = 'octoview-pane';
-const THREE_EXTS = ['.glb', '.gltf', '.obj', '.ply', '.pcd'];
-const ARRAY_EXTS = ['.npy', '.npz'];
-const TABLE_EXTS = ['.parquet', '.arrow', '.feather', '.ipc'];
 const MODEL_EXTS = ['.safetensors', '.gguf'];
-const IMAGE_EXTS = ['.exr', '.hdr', '.tif', '.tiff'];
-const SPLAT_EXTS = ['.splat', '.spz', '.ksplat', '.sog', '.lcc'];
 const MAX_PREVIEW_BYTES = 64 * 1024 * 1024;
 const MAX_MODEL_BYTES = 32 * 1024 * 1024;
-
-// Cheap header sniff: a 3DGS .ply carries gaussian props; a plain .ply does not.
-// Lets us route .ply to the splat vs the mesh/point-cloud renderer without
-// loading either module first.
-function isPlySplatHead(buf) {
-  const head = new TextDecoder().decode(new Uint8Array(buf, 0, Math.min(16384, buf.byteLength)));
-  // Compressed (PlayCanvas/SuperSplat) or standard-float 3DGS ply, vs a mesh/point cloud.
-  return (
-    /property\s+\S+\s+packed_position\b/.test(head) ||
-    (/property\s+\S+\s+f_dc_0\b/.test(head) &&
-      /property\s+\S+\s+scale_0\b/.test(head) &&
-      /property\s+\S+\s+rot_0\b/.test(head))
-  );
-}
 
 // Heavy renderers are ES modules, imported only when their file type is opened,
 // so normal github browsing stays light.
@@ -212,67 +193,12 @@ function openPane(btn, buf) {
 }
 
 async function render(pane, buf, ext) {
-  // Critical dimensions are set inline (CSSOM), not only via the stylesheet, in
-  // case github's CSP blocks our injected <style>; the canvas/frame still fills.
-  if (ext === '.html' || ext === '.htm') {
-    pane.classList.add('ov-fill');
-    pane.style.height = '78vh';
-    pane.appendChild(reportFrame(O.decode(buf)));
-  } else if (ext === '.ipynb') {
-    pane.classList.add('ov-scroll');
-    pane.style.maxHeight = '82vh';
-    pane.style.overflow = 'auto';
-    O.renderNotebook(
-      JSON.parse(O.decode(buf)),
-      pane,
-      (html) => sandboxFrame(html, 'ov-nb-out'),
-      plotlyChart
-    );
-  } else if (THREE_EXTS.includes(ext) || SPLAT_EXTS.includes(ext)) {
-    pane.classList.add('ov-fill');
-    pane.style.height = '78vh';
-    if (ext === '.lcc') {
-      await renderLcc(buf, pane);
-    } else if (SPLAT_EXTS.includes(ext) || (ext === '.ply' && isPlySplatHead(buf))) {
-      const { renderSplat } = await loadModule('render-splat.js');
-      await renderSplat(buf, pane, ext);
-    } else {
-      const { render3D } = await loadModule('render3d.js');
-      render3D(buf, pane, ext);
-    }
-  } else if (ARRAY_EXTS.includes(ext)) {
-    pane.classList.add('ov-scroll');
-    pane.style.maxHeight = '82vh';
-    pane.style.overflow = 'auto';
-    const { renderArray } = await loadModule('render-array.js');
-    await renderArray(buf, pane, ext);
-  } else if (TABLE_EXTS.includes(ext)) {
-    pane.classList.add('ov-scroll');
-    pane.style.maxHeight = '82vh';
-    pane.style.overflow = 'auto';
-    const { renderTable } = await loadModule('render-table.js');
-    await renderTable(buf, pane, ext);
-  } else if (ext === '.onnx') {
-    pane.classList.add('ov-scroll');
-    pane.style.maxHeight = '82vh';
-    pane.style.overflow = 'auto';
-    const { renderOnnx } = await loadModule('render-onnx.js');
-    renderOnnx(buf, pane);
-  } else if (MODEL_EXTS.includes(ext)) {
-    pane.classList.add('ov-scroll');
-    pane.style.maxHeight = '82vh';
-    pane.style.overflow = 'auto';
-    const { renderModel } = await loadModule('render-model.js');
-    renderModel(buf, pane, ext);
-  } else if (IMAGE_EXTS.includes(ext)) {
-    pane.classList.add('ov-scroll');
-    pane.style.maxHeight = '82vh';
-    pane.style.overflow = 'auto';
-    const { renderImage } = await loadModule('render-image.js');
-    renderImage(buf, pane, ext);
-  } else {
-    msg(pane, 'No preview for ' + ext + ' yet.');
-  }
+  const { renderFile } = await loadModule('render-file.js');
+  await renderFile(buf, pane, ext, {
+    htmlFrame: (html) => (ext === '.ipynb' ? sandboxFrame(html, 'ov-nb-out') : reportFrame(html)),
+    chart: plotlyChart,
+    lcc: renderLcc,
+  });
 }
 
 async function renderLcc(metaBytes, mount) {

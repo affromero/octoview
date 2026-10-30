@@ -4,7 +4,7 @@
 
 # octoview
 
-**Preview the files GitHub won't, straight from your private repos.**
+**Preview ML and data files on GitHub and in VS Code.**
 
 _Gaussian splats, meshes, point clouds, depth and EXR, HTML reports, notebooks, tabular data. The ML and data files GitHub serves as raw bytes._
 
@@ -188,7 +188,7 @@ that matters.
 flowchart TD
     subgraph blob["github.com blob page (content-script isolated world)"]
         content["Preview button · cookie fetch<br/>LFS download fallback<br/>(content.js)"]
-        core["dispatch by extension · raw/LFS-URL resolve · notebook render<br/>(core.js, pure, unit-tested)"]
+        core["supported formats · raw/LFS-URL resolve · notebook render<br/>(core.js, pure, unit-tested)"]
         subgraph renderers["Lazy-imported renderers"]
             r3d["render3d.js<br/>mesh · point cloud"]
             rsplat["render-splat.js<br/>main-thread splats"]
@@ -209,9 +209,20 @@ flowchart TD
     gh -->|raw bytes or LFS pointer| content
     content -->|LFS pointer → download| lfs
     lfs -->|bytes| content
-    core --> renderers
     rsplat -->|"{pos,col,scale,quat}"| decode
     vendor -.-> renderers
+    subgraph vscode["VS Code workspace"]
+        host["vscode/extension.js<br/>read-only custom editor<br/>bounded file reads + fixed LCC siblings"]
+        webview["vscode/webview.js<br/>private message bridge<br/>packaged assets only"]
+        dispatch["render-file.js<br/>shared format dispatch"]
+        frames["sandboxed srcdoc<br/>static HTML, no inline scripts"]
+    end
+    host -->|"file bytes, postMessage"| webview
+    webview --> dispatch
+    content --> dispatch
+    dispatch --> renderers
+    dispatch --> core
+    webview --> frames
     content -->|report HTML, postMessage| viewer
     viewer -->|"no beacon (CSP refused)"| content
 
@@ -219,6 +230,9 @@ flowchart TD
         safari["build-safari.sh<br/>signed .xcarchive"]
         chrome["build-chrome.mjs<br/>strict CSP + sandbox viewer page"]
         firefox["build-firefox.mjs<br/>strict CSP"]
+        vsix["build-vscode.mjs<br/>shared renderers + VSIX"]
+        marketplace["publish-vscode.yml<br/>manual main commit + GitHub OIDC<br/>Visual Studio Marketplace"]
+        vsix --> marketplace
     end
 ```
 
@@ -283,6 +297,47 @@ It comes up, so here is the reasoning:
 
 ## Develop
 
+### VS Code
+
+Build and install the desktop extension:
+
+```sh
+npm ci
+npm run build:vscode
+code --install-extension build/octoview-vscode.vsix
+```
+
+Right-click a supported workspace file and choose **Octoview: Open Preview**,
+or use **Reopen Editor With... > Octoview Preview**. The Command Palette also
+offers **Octoview: Open Preview** for the active file. Previews are read-only and
+opt-in, so your editor defaults stay as they are. **Refresh** reads saved changes.
+
+The VS Code extension reuses the browser renderers and bundled libraries. Files
+stay on the workspace host, without GitHub authentication or uploads. Its webview
+can load only packaged assets. Reports and notebook HTML outputs show static
+content in sandboxed frames; notebook Plotly MIME outputs remain interactive.
+glTF assets must be self-contained, and LCC needs `index.bin` and `data.bin`
+beside the `.lcc` file. Git LFS pointers need `git lfs pull` first.
+
+Normal files and each LCC companion have a 64 MiB limit. Local model previews
+read only the first 32 MiB. Other filesystem providers have a 32 MiB model limit
+because VS Code's filesystem API has no range reads. Remote SSH workspaces run
+the extension on the workspace host. Requires desktop VS Code 1.85 or newer.
+
+Publish a verified commit from `main` through the manual GitHub workflow:
+
+```sh
+gh workflow run publish-vscode.yml --ref main -f expected_sha="$(git rev-parse origin/main)"
+```
+
+The workflow checks the requested commit, runs CI and the dependency audit, builds
+the VSIX, and publishes it using GitHub trusted publishing. The Marketplace
+publisher `affromero` trusts `affromero/octoview` and the workflow filename
+`publish-vscode.yml`, with no environment restriction. No publishing token is
+stored in GitHub. The package version comes from `extension/manifest.json`.
+
+### Browser extensions
+
 No Xcode is needed for the dev loop. Safari loads the unpacked folder directly.
 
 1. **Develop, Add Temporary Extension**, then select `extension/`.
@@ -307,19 +362,29 @@ npm test                              # vitest (jsdom): core logic and renderers
 npx playwright install chromium webkit
 npm run test:e2e                      # renders every sample in Chromium AND WebKit (Safari's engine)
 npm run test:chrome                   # loads the Chrome build into Chromium: button, live report, splat
+npm run test:vscode                   # builds a VSIX, renders samples and checks webview isolation
 npm run ci                            # lint, format check, unit tests
 ```
 
 The e2e test is the important one. It renders each sample under the real extension CSP in **WebKit**,
 which is how Safari-specific breakage that jsdom cannot see gets caught.
 
+With desktop VS Code installed, run its extension-host smoke test after building:
+
+```sh
+code --extensionDevelopmentPath="$PWD/build/vscode" \
+  --extensionTestsPath="$PWD/test/vscode-host.cjs" \
+  --user-data-dir="$(mktemp -d)" --disable-extensions --disable-workspace-trust
+```
+
 ## Layout
 
 ```
 extension/
   manifest.json        MV3 config (content scripts, web-accessible render modules)
-  core.js              pure and DOM logic: dispatch, raw/LFS URL resolve, notebook render (unit-tested)
+  core.js              supported formats, raw/LFS URL resolve, notebook render (unit-tested)
   content.js           github.com: button, cookie fetch + GitHub LFS download, inline render pane
+  render-file.js       shared format dispatch for browser and VS Code previews
   viewer.html          extension page hosting a report's sandboxed live frame (CSP probe + fallback)
   render3d.js          three.js mesh and point-cloud renderer (gizmo, point sliders)
   render-splat.js      native anisotropic WebGL2 splat renderer (.splat, 3DGS/compressed .ply, .spz, .ksplat, .sog, .lcc)
@@ -331,12 +396,16 @@ extension/
   unzip.js             shared ZIP reader (fflate) for .npz and .sog
   vendor/              self-contained libs (marked, three.js + loaders, hyparquet, fflate, plotly)
 samples/               one file per type, previewable from the repo
+vscode/                read-only custom editor, webview bridge, styles, extension manifest
+scripts/build-vscode.mjs  stages shared renderers and packages build/octoview-vscode.vsix
 tests/                 vitest suite over core.js
 test/harness.html/.js  stand-in blob page that drives the inline render path
 test/render.e2e.mjs    Chromium and WebKit render check under a github-like CSP
+test/vscode.e2e.mjs    Chromium render check with the VS Code CSP and parent-frame messages
 ```
 
-Each `render-*.js` is an ES module, lazy-imported by `content.js` only when its file type is opened.
+`render-file.js` lazy-imports the renderer for the selected format. The browser
+content script and VS Code webview supply their own file access and sandboxed HTML frames.
 
 ## More from me
 
