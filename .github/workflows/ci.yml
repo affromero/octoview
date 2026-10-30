@@ -18,6 +18,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Check vendored dependencies
+        run: |
+          ./scripts/vendor.sh
+          git diff --exit-code -- extension/vendor
       - run: npm run lint
       - run: npm run format:check
       - run: npm run test

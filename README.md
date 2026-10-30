@@ -297,6 +297,17 @@ It comes up, so here is the reasoning:
 
 ## Develop
 
+After dependency updates, install the lockfile and refresh the committed libraries:
+
+```sh
+npm ci
+./scripts/vendor.sh
+```
+
+Commit the changed files in `extension/vendor/` with `package.json` and
+`package-lock.json`. CI and the VS Code publishing workflow rebuild these libraries
+and reject updates whose committed bundles differ from the lockfile build.
+
 ### VS Code
 
 Build and install the desktop extension:
