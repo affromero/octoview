@@ -18,6 +18,9 @@
     "Data Science"
   ],
   "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "type": "commonjs",
   "extensionKind": [
     "workspace"
@@ -25,6 +28,7 @@
   "icon": "icon.png",
   "files": [
     "extension.js",
+    "settings.js",
     "media/**",
     "icon.png",
     "README.md",
@@ -38,6 +42,49 @@
     "virtualWorkspaces": true
   },
   "contributes": {
+    "configuration": {
+      "title": "Octoview",
+      "properties": {
+        "octoview.autoPreviewFileTypes": {
+          "type": "array",
+          "default": [],
+          "scope": "application",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              ".html",
+              ".htm",
+              ".ipynb",
+              ".glb",
+              ".gltf",
+              ".obj",
+              ".ply",
+              ".pcd",
+              ".npy",
+              ".npz",
+              ".parquet",
+              ".arrow",
+              ".feather",
+              ".ipc",
+              ".safetensors",
+              ".gguf",
+              ".onnx",
+              ".exr",
+              ".hdr",
+              ".tif",
+              ".tiff",
+              ".splat",
+              ".spz",
+              ".ksplat",
+              ".sog",
+              ".lcc"
+            ]
+          },
+          "markdownDescription": "File types to open automatically in Octoview on subsequent opens. Leave empty for manual previews. Existing Editor Associations for the same filename pattern are preserved."
+        }
+      }
+    },
     "commands": [
       {
         "command": "octoview.openPreview",

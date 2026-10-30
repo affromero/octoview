@@ -8,6 +8,19 @@ You can also use **Reopen Editor With... > Octoview Preview** or run
 **Octoview: Open Preview** from the Command Palette for the active file.
 The preview is read-only and opt-in. Use **Refresh** to read changes saved to disk.
 
+For automatic previews, open **Settings > Extensions > Octoview > Auto Preview
+File Types** and add file extensions such as `.parquet`. The list starts empty.
+Changes apply to subsequent file opens. Removing an entry removes only an editor
+association created by this setting. Existing Editor Associations for the same
+filename pattern and your manual changes to them are preserved. Other filename
+patterns follow VS Code's normal editor resolution rules.
+
+For example, this setting opens Parquet and NumPy files directly in Octoview:
+
+```json
+"octoview.autoPreviewFileTypes": [".parquet", ".npy"]
+```
+
 Supported extensions: `.html`, `.htm`, `.ipynb`, `.glb`, `.gltf`, `.obj`, `.ply`,
 `.pcd`, `.npy`, `.npz`, `.parquet`, `.arrow`, `.feather`, `.ipc`, `.safetensors`,
 `.gguf`, `.onnx`, `.exr`, `.hdr`, `.tif`, `.tiff`, `.splat`, `.spz`, `.ksplat`,

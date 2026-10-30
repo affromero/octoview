@@ -213,11 +213,13 @@ flowchart TD
     vendor -.-> renderers
     subgraph vscode["VS Code workspace"]
         host["vscode/extension.js<br/>read-only custom editor<br/>bounded file reads + fixed LCC siblings"]
+        preferences["vscode/settings.js<br/>optional file types<br/>native editor associations"]
         webview["vscode/webview.js<br/>private message bridge<br/>packaged assets only"]
         dispatch["render-file.js<br/>shared format dispatch"]
         frames["sandboxed srcdoc<br/>static HTML, no inline scripts"]
     end
     host -->|"file bytes, postMessage"| webview
+    host --> preferences
     webview --> dispatch
     content --> dispatch
     dispatch --> renderers
@@ -323,6 +325,13 @@ or use **Reopen Editor With... > Octoview Preview**. The Command Palette also
 offers **Octoview: Open Preview** for the active file. Previews are read-only and
 opt-in, so your editor defaults stay as they are. **Refresh** reads saved changes.
 
+To preview files automatically, open **Settings > Extensions > Octoview > Auto
+Preview File Types** and add extensions such as `.parquet` or `.npy`. The list is
+empty by default. Changes apply to subsequent file opens. Removing a file type
+removes only associations created by this setting; existing Editor Associations
+for the same filename pattern and manual changes to them are preserved. Other
+patterns follow VS Code's normal editor resolution rules.
+
 The VS Code extension reuses the browser renderers and bundled libraries. Files
 stay on the workspace host, without GitHub authentication or uploads. Its webview
 can load only packaged assets. Reports and notebook HTML outputs show static
@@ -388,6 +397,9 @@ code --extensionDevelopmentPath="$PWD/build/vscode" \
   --user-data-dir="$(mktemp -d)" --disable-extensions --disable-workspace-trust
 ```
 
+To also inspect the native Parquet table, set `OCTOVIEW_TEST_CDP_PORT` and launch
+the test host with the matching `--remote-debugging-port` on localhost.
+
 ## Layout
 
 ```
@@ -408,6 +420,7 @@ extension/
   vendor/              self-contained libs (marked, three.js + loaders, hyparquet, fflate, plotly)
 samples/               one file per type, previewable from the repo
 vscode/                read-only custom editor, webview bridge, styles, extension manifest
+  settings.js          optional automatic previews through native editor associations
 scripts/build-vscode.mjs  stages shared renderers and packages build/octoview-vscode.vsix
 tests/                 vitest suite over core.js
 test/harness.html/.js  stand-in blob page that drives the inline render path

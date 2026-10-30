@@ -1,6 +1,7 @@
 const { open } = require('node:fs/promises');
 const { posix } = require('node:path');
 const manifest = require('./package.json');
+const { initializeAutoPreviews } = require('./settings.js');
 
 const VIEW_TYPE = 'octoview.preview';
 const MAX_BYTES = 64 * 1024 * 1024;
@@ -159,6 +160,7 @@ function activate(context) {
       await vscode.commands.executeCommand('vscode.openWith', uri, VIEW_TYPE);
     })
   );
+  initializeAutoPreviews(vscode, context);
 }
 
 module.exports = { activate, createProvider, getWebviewHtml, readPreview };
