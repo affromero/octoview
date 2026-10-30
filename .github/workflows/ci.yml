@@ -21,3 +21,6 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm run test
+      - run: npm run build:vscode
+      - run: npx playwright install --with-deps chromium
+      - run: node test/vscode.e2e.mjs

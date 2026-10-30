@@ -12,6 +12,8 @@
     "test:watch": "vitest",
     "test:e2e": "node test/render.e2e.mjs",
     "build:chrome": "node scripts/build-chrome.mjs",
+    "build:vscode": "node scripts/build-vscode.mjs",
+    "test:vscode": "npm run build:vscode && node test/vscode.e2e.mjs",
     "test:chrome": "npm run build:chrome && node test/chrome.e2e.mjs",
     "build:firefox": "node scripts/build-firefox.mjs",
     "test:firefox": "npm run build:firefox && npx --yes addons-linter build/firefox",
@@ -24,12 +26,12 @@
     "coverage": "vitest run --coverage",
     "lint": "eslint .",
     "audit": "npm audit --audit-level=high",
-    "format": "prettier --write \"**/*.{js,mjs,json,md,yml,yaml}\"",
-    "format:check": "prettier --check \"**/*.{js,mjs,json,md,yml,yaml}\"",
+    "format": "prettier --write \"**/*.{js,mjs,cjs,json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{js,mjs,cjs,json,md,yml,yaml}\"",
     "ci": "npm run lint && npm run format:check && npm run test"
   },
   "lint-staged": {
-    "*.{js,mjs}": [
+    "*.{js,mjs,cjs}": [
       "eslint --fix --max-warnings 0 --no-warn-ignored",
       "prettier --write"
     ],
@@ -41,6 +43,7 @@
     "@eslint/js": "^10.0.1",
     "@uwdata/flechette": "^2.6.0",
     "@vitest/coverage-v8": "^5.0.3",
+    "@vscode/vsce": "4.1.0",
     "esbuild": "^0.28.2",
     "eslint": "^10.12.0",
     "fflate": "^0.8.3",

@@ -8,7 +8,7 @@
     <!-- Stands in for a github.com blob page: served with a github-like CSP so
          the renderers run exactly as the content script's inline path does. core
          and marked load as 'self' scripts (the content script equivalent); the
-         module dispatch mirrors content.js render(). -->
+         module dispatch is shared with content.js and the VS Code webview. -->
     <div id="mount"></div>
     <script src="/extension/vendor/marked.min.js"></script>
     <script src="/extension/vendor/highlight.min.js"></script>

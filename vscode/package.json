@@ -1,0 +1,144 @@
+{
+  "name": "octoview",
+  "displayName": "Octoview",
+  "description": "Preview splats, 3D models, arrays, tables, model metadata, scientific images, notebooks and HTML in VS Code.",
+  "version": "0.1.0",
+  "publisher": "affromero",
+  "author": "Andres Romero <me@afromero.co>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/affromero/octoview.git"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Visualization",
+    "Data Science"
+  ],
+  "main": "./extension.js",
+  "type": "commonjs",
+  "extensionKind": [
+    "workspace"
+  ],
+  "icon": "icon.png",
+  "files": [
+    "extension.js",
+    "media/**",
+    "icon.png",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": true
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "octoview.openPreview",
+        "title": "Octoview: Open Preview"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "octoview.openPreview",
+          "when": "resourceExtname =~ /^\\.(html|htm|ipynb|glb|gltf|obj|ply|pcd|npy|npz|parquet|arrow|feather|ipc|safetensors|gguf|onnx|exr|hdr|tif|tiff|splat|spz|ksplat|sog|lcc)$/i",
+          "group": "navigation"
+        }
+      ]
+    },
+    "customEditors": [
+      {
+        "viewType": "octoview.preview",
+        "displayName": "Octoview Preview",
+        "priority": "option",
+        "selector": [
+          {
+            "filenamePattern": "*.html"
+          },
+          {
+            "filenamePattern": "*.htm"
+          },
+          {
+            "filenamePattern": "*.ipynb"
+          },
+          {
+            "filenamePattern": "*.glb"
+          },
+          {
+            "filenamePattern": "*.gltf"
+          },
+          {
+            "filenamePattern": "*.obj"
+          },
+          {
+            "filenamePattern": "*.ply"
+          },
+          {
+            "filenamePattern": "*.pcd"
+          },
+          {
+            "filenamePattern": "*.npy"
+          },
+          {
+            "filenamePattern": "*.npz"
+          },
+          {
+            "filenamePattern": "*.parquet"
+          },
+          {
+            "filenamePattern": "*.arrow"
+          },
+          {
+            "filenamePattern": "*.feather"
+          },
+          {
+            "filenamePattern": "*.ipc"
+          },
+          {
+            "filenamePattern": "*.safetensors"
+          },
+          {
+            "filenamePattern": "*.gguf"
+          },
+          {
+            "filenamePattern": "*.onnx"
+          },
+          {
+            "filenamePattern": "*.exr"
+          },
+          {
+            "filenamePattern": "*.hdr"
+          },
+          {
+            "filenamePattern": "*.tif"
+          },
+          {
+            "filenamePattern": "*.tiff"
+          },
+          {
+            "filenamePattern": "*.splat"
+          },
+          {
+            "filenamePattern": "*.spz"
+          },
+          {
+            "filenamePattern": "*.ksplat"
+          },
+          {
+            "filenamePattern": "*.sog"
+          },
+          {
+            "filenamePattern": "*.lcc"
+          }
+        ]
+      }
+    ]
+  }
+}
