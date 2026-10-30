@@ -231,6 +231,8 @@ flowchart TD
         chrome["build-chrome.mjs<br/>strict CSP + sandbox viewer page"]
         firefox["build-firefox.mjs<br/>strict CSP"]
         vsix["build-vscode.mjs<br/>shared renderers + VSIX"]
+        marketplace["publish-vscode.yml<br/>manual main commit + GitHub OIDC<br/>Visual Studio Marketplace"]
+        vsix --> marketplace
     end
 ```
 
@@ -321,6 +323,18 @@ Normal files and each LCC companion have a 64 MiB limit. Local model previews
 read only the first 32 MiB. Other filesystem providers have a 32 MiB model limit
 because VS Code's filesystem API has no range reads. Remote SSH workspaces run
 the extension on the workspace host. Requires desktop VS Code 1.85 or newer.
+
+Publish a verified commit from `main` through the manual GitHub workflow:
+
+```sh
+gh workflow run publish-vscode.yml --ref main -f expected_sha="$(git rev-parse origin/main)"
+```
+
+The workflow checks the requested commit, runs CI and the dependency audit, builds
+the VSIX, and publishes it using GitHub trusted publishing. The Marketplace
+publisher `affromero` trusts `affromero/octoview` and the workflow filename
+`publish-vscode.yml`, with no environment restriction. No publishing token is
+stored in GitHub. The package version comes from `extension/manifest.json`.
 
 ### Browser extensions
 
