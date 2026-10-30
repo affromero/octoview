@@ -431,6 +431,10 @@ test/vscode.e2e.mjs    Chromium render check with the VS Code CSP and parent-fra
 `render-file.js` lazy-imports the renderer for the selected format. The browser
 content script and VS Code webview supply their own file access and sandboxed HTML frames.
 
+Tagged GitHub releases include the Chrome ZIP, Firefox ZIP, AMO source ZIP, and
+VS Code VSIX. The VS Code Marketplace update is published through the separate
+manual workflow for the same main commit.
+
 ## More from me
 
 If octoview is useful, you might like these too:

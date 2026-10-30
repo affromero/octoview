@@ -1,6 +1,6 @@
 name: Release
 
-# On a v* tag, build the three store packages and publish them on the GitHub
+# On a v* tag, build the browser and VS Code packages and publish them on the GitHub
 # release, with notes pulled from the matching CHANGELOG section.
 on:
   push:
@@ -19,22 +19,44 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Verify release versions
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const tag = process.env.GITHUB_REF_NAME;
+          if (!/^v\d+\.\d+\.\d+$/.test(tag)) throw new Error(`Invalid release tag: ${tag}`);
+          for (const file of ['extension/manifest.json', 'package.json', 'vscode/package.json', 'package-lock.json']) {
+            const manifest = JSON.parse(readFileSync(file, 'utf8'));
+            if (manifest.version !== tag.slice(1)) throw new Error(`${file} does not match ${tag}`);
+          }
+          NODE
+      - name: Check vendored dependencies
+        run: |
+          ./scripts/vendor.sh
+          git diff --exit-code -- extension/vendor
       # The Chrome/Firefox builds rasterize the icon with Playwright Chromium.
       - run: npx playwright install --with-deps chromium
       - run: npm run build:chrome
       - run: npm run build:firefox
       - run: npm run build:amo-source
-      - name: Publish store packages on the release
+      - run: npm run build:vscode
+      - name: Extract release notes
+        run: |
+          awk -v version="${GITHUB_REF_NAME#v}" '
+            index($0, "## [" version "]") == 1 { found=1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > build/release-notes.md
+          if [ -z "$(tr -d '[:space:]' < build/release-notes.md)" ]; then
+            echo "::error::Missing CHANGELOG notes for $GITHUB_REF_NAME"
+            exit 1
+          fi
+      - name: Create release with packages
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          NOTES="$(awk "/^## \[$VERSION\]/{f=1;next} /^## \[/{if(f)exit} f" CHANGELOG.md)"
-          ASSETS="build/octoview-chrome.zip build/octoview-firefox.zip build/octoview-amo-source.zip"
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" $ASSETS --clobber
-          else
-            gh release create "$GITHUB_REF_NAME" $ASSETS \
-              --title "octoview $GITHUB_REF_NAME" \
-              --notes "${NOTES:-Release $GITHUB_REF_NAME}"
-          fi
+          gh release create "$GITHUB_REF_NAME" \
+            build/octoview-chrome.zip build/octoview-firefox.zip \
+            build/octoview-amo-source.zip build/octoview-vscode.vsix \
+            --verify-tag --title "octoview $GITHUB_REF_NAME" \
+            --notes-file build/release-notes.md
