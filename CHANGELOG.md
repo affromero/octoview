@@ -6,6 +6,23 @@ new version, commits, and tags it.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-30
+
+### Added
+
+- VS Code extension for local and remote files, using the shared renderers and
+  sandboxed notebook and HTML previews. ([#26](https://github.com/affromero/octoview/pull/26))
+- Per-file-type automatic previews in VS Code settings. Manual previews remain
+  the default, and existing editor associations are preserved.
+  ([#28](https://github.com/affromero/octoview/pull/28))
+
+### Changed
+
+- Updated Parquet and Arrow parsers and added checks that vendored bundles match
+  the lockfile. ([#27](https://github.com/affromero/octoview/pull/27))
+- Updated development dependencies and patched Vite and Undici security issues.
+  ([#24](https://github.com/affromero/octoview/pull/24), [#23](https://github.com/affromero/octoview/pull/23), [#18](https://github.com/affromero/octoview/pull/18))
+
 ## [0.1.0] - 2026-07-11
 
 First public release.
