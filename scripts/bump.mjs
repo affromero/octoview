@@ -30,6 +30,7 @@ const setVersion = (path) => {
   writeFileSync(path, JSON.stringify(json, null, 2) + '\n');
 };
 setVersion(manifestPath);
+setVersion('vscode/package.json');
 setVersion('package.json');
 // keep the top-level version in the lockfile aligned (npm reads it from here)
 try {
@@ -47,7 +48,14 @@ let changelog = readFileSync('CHANGELOG.md', 'utf8');
 changelog = changelog.replace(/## \[Unreleased\]\n/, `## [Unreleased]\n\n## [${next}] - ${date}\n`);
 writeFileSync('CHANGELOG.md', changelog);
 
-execFileSync('git', ['add', manifestPath, 'package.json', 'package-lock.json', 'CHANGELOG.md']);
+execFileSync('git', [
+  'add',
+  manifestPath,
+  'vscode/package.json',
+  'package.json',
+  'package-lock.json',
+  'CHANGELOG.md',
+]);
 execFileSync('git', ['commit', '-m', `release: v${next}`]);
 execFileSync('git', ['tag', `v${next}`]);
 console.log(`bumped ${manifest.version} -> ${next}, committed and tagged v${next}`);
