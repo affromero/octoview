@@ -6,6 +6,25 @@ new version, commits, and tags it.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-10
+
+### Added
+
+- NumPy previews support float16 values, exact 64-bit integers, scalar arrays,
+  and slices of higher-dimensional arrays. ([#32](https://github.com/affromero/octoview/pull/32))
+
+### Fixed
+
+- Empty Arrow and Parquet tables retain their column names. Wide tables report
+  the full column count and show up to 100 columns. Parquet previews allow up
+  to 100 selected leaf columns. ([#32](https://github.com/affromero/octoview/pull/32))
+
+### Changed
+
+- Updated preview bundles and development dependencies, and patched minimatch
+  preprocessing.
+  ([#31](https://github.com/affromero/octoview/pull/31), [#30](https://github.com/affromero/octoview/pull/30))
+
 ## [0.2.0] - 2026-10-30
 
 ### Added
