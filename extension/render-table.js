@@ -5,6 +5,7 @@ import { parquetReadObjects, parquetMetadata } from './vendor/hyparquet.esm.js';
 import { tableFromIPC } from './vendor/flechette.esm.js';
 
 const LIMIT = 200;
+const COLUMN_LIMIT = 100;
 const ARROW_EXTS = ['.arrow', '.feather', '.ipc'];
 
 async function readRows(buf, ext) {
@@ -14,13 +15,30 @@ async function readRows(buf, ext) {
     const names = table.names;
     const rows = [];
     const limit = Math.min(LIMIT, totalRows);
-    const cols = names.map((n) => table.getChild(n));
+    const selected = names.slice(0, COLUMN_LIMIT);
+    const cols = selected.map((n) => table.getChild(n));
     for (let i = 0; i < limit; i++)
-      rows.push(Object.fromEntries(names.map((n, c) => [n, cols[c].at(i)])));
-    return { totalRows, rows };
+      rows.push(Object.fromEntries(selected.map((n, c) => [n, cols[c].at(i)])));
+    return { totalRows, rows, names };
   }
   const meta = parquetMetadata(buf);
   const totalRows = Number(meta.num_rows);
+  const names = [];
+  let remaining = 0;
+  for (const field of meta.schema.slice(1)) {
+    if (remaining === 0) {
+      names.push(field.name);
+      remaining = 1;
+    }
+    remaining += (field.num_children || 0) - 1;
+  }
+  const selected = new Set(names.slice(0, COLUMN_LIMIT));
+  for (const group of meta.row_groups) {
+    const leaves = group.columns.filter((column) =>
+      selected.has(column.meta_data?.path_in_schema[0])
+    );
+    if (leaves.length > COLUMN_LIMIT) throw new Error('too many nested columns to preview');
+  }
   const file = {
     byteLength: buf.byteLength,
     slice: (s, e) => buf.slice(s, e ?? buf.byteLength),
@@ -28,23 +46,25 @@ async function readRows(buf, ext) {
   const rows = await parquetReadObjects({
     metadata: meta,
     file,
+    columns: [...selected],
     rowStart: 0,
     rowEnd: Math.min(LIMIT, totalRows),
   });
-  return { totalRows, rows };
+  return { totalRows, rows, names };
 }
 
 export async function renderTable(buf, mount, ext) {
   mount.textContent = '';
   try {
-    const { totalRows, rows } = await readRows(buf, ext);
-    const cols = rows.length ? Object.keys(rows[0]) : [];
+    const { totalRows, rows, names } = await readRows(buf, ext);
+    const cols = names.slice(0, COLUMN_LIMIT);
 
     const info = document.createElement('div');
     info.className = 'ov-tbl-meta';
     info.textContent =
-      `${totalRows.toLocaleString()} rows × ${cols.length} cols` +
-      (totalRows > LIMIT ? `  ·  showing first ${LIMIT}` : '');
+      `${totalRows.toLocaleString()} rows × ${names.length} cols` +
+      (totalRows > LIMIT ? `  ·  showing first ${LIMIT} rows` : '') +
+      (names.length > COLUMN_LIMIT ? `  ·  showing first ${COLUMN_LIMIT} columns` : '');
     mount.appendChild(info);
 
     const scroll = document.createElement('div');

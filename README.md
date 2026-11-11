@@ -79,7 +79,7 @@ renderer. Status is **verified in WebKit (Safari's engine) by an automated rende
 | **Gaussian splats**            | `.splat` `.ply` (3DGS + compressed) `.spz` (v1-4) `.ksplat` `.sog` `.lcc` | native anisotropic WebGL2 EWA renderer (main thread, no Spark); LCC loads `index.bin` + `data.bin` from the same directory |   ✅   |
 | **Model graphs**               | `.safetensors` `.gguf` `.onnx`                                            | tensor + metadata tables; ONNX gets a Netron-style SVG graph of the ops                                                    |   ✅   |
 | **Tabular data**               | `.parquet` `.arrow` `.feather` `.ipc`                                     | hyparquet / flechette, sticky-header table                                                                                 |   ✅   |
-| **Array previews**             | `.npy` `.npz`                                                             | viridis heatmap / RGB image, with a raw-numbers view (1-3D)                                                                |   ✅   |
+| **Array previews**             | `.npy` `.npz`                                                             | heatmap or RGB image, raw numbers, and multidimensional slices                                                             |   ✅   |
 | **Scientific images**          | `.exr` `.hdr` `.tif` `.tiff`                                              | tone-mapped to a canvas with an exposure slider                                                                            |   ✅   |
 
 > **On WebKit.** Two Safari limits shape the design. (1) Renderers parse file bytes on the main

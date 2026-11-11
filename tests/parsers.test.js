@@ -1,9 +1,9 @@
 // Comprehensive unit tests for the pure binary parsers (no three.js, no canvas):
 // assert the ACTUAL decoded values, endianness, ordering, bounds, and the
 // large-file guards, plus round-trips against the committed sample fixtures.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { parseNpy, unzipNpz, colormap } from '../extension/render-array.js';
+import { parseNpy, unzipNpz, colormap, renderArray } from '../extension/render-array.js';
 import { parseSafetensors, parseGguf } from '../extension/render-model.js';
 import {
   parseSplatBin,
@@ -23,7 +23,7 @@ const fixture = (name) => {
 
 // Build a NumPy v1.0 .npy from a flat JS array of numbers.
 function makeNpy(descr, shape, flat, fortran = false) {
-  const SIZE = { f4: 4, f8: 8, i4: 4, i2: 2, u1: 1, u2: 2 };
+  const SIZE = { f2: 2, f4: 4, f8: 8, i8: 8, i4: 4, i2: 2, u8: 8, u1: 1, u2: 2 };
   const size = SIZE[descr.slice(1)];
   const dict = `{'descr': '${descr}', 'fortran_order': ${fortran ? 'True' : 'False'}, 'shape': (${shape.join(', ')}${shape.length === 1 ? ',' : ''}), }`;
   let pad = 64 - ((10 + dict.length + 1) % 64);
@@ -40,18 +40,40 @@ function makeNpy(descr, shape, flat, fortran = false) {
   const little = descr[0] !== '>';
   const base = 10 + header.length;
   const put = {
+    f2: 'setUint16',
     f4: 'setFloat32',
     f8: 'setFloat64',
+    i8: 'setBigInt64',
     i4: 'setInt32',
     i2: 'setInt16',
     u1: 'setUint8',
     u2: 'setUint16',
+    u8: 'setBigUint64',
   }[descr.slice(1)];
   flat.forEach((v, i) => dv[put](base + i * size, v, little));
   return buf;
 }
 
 describe('parseNpy', () => {
+  it('preserves 64-bit integers in either byte order', () => {
+    for (const endian of ['<', '>']) {
+      expect([...parseNpy(makeNpy(endian + 'i8', [2], [-9007199254740993n, 7n])).data]).toEqual([
+        -9007199254740993n,
+        7n,
+      ]);
+      expect([...parseNpy(makeNpy(endian + 'u8', [1], [18446744073709551615n])).data]).toEqual([
+        18446744073709551615n,
+      ]);
+    }
+  });
+  it('reads half-precision floats in either byte order', () => {
+    for (const endian of ['<', '>']) {
+      const { data } = parseNpy(makeNpy(endian + 'f2', [5], [0x3c00, 0xc000, 1, 0x7c00, 0x7e00]));
+      expect([...data.slice(0, 4)]).toEqual([1, -2, 2 ** -24, Infinity]);
+      expect(Number.isNaN(data[4])).toBe(true);
+    }
+  });
+
   it('reads a 2D little-endian float32 array row-major', () => {
     const { dims, descr, data } = parseNpy(makeNpy('<f4', [2, 3], [1, 2, 3, 4, 5, 6]));
     expect(dims).toEqual([2, 3]);
@@ -93,12 +115,74 @@ describe('parseNpy', () => {
     expect(() => parseNpy(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]).buffer)).toThrow(/not a .npy/);
     const good = makeNpy('<f4', [4], [1, 2, 3, 4]);
     expect(() => parseNpy(good.slice(0, good.byteLength - 4))).toThrow(/truncated/);
+    expect(() => parseNpy(makeNpy('<f4', [-1], []))).toThrow(/invalid array shape/);
+  });
+
+  it('rejects arrays that would require excessive decoding or reordering', () => {
+    expect(() => parseNpy(makeNpy('<f2', [16 * 1024 * 1024 + 1], []))).toThrow(
+      /float16 array is too large/
+    );
+    expect(() => parseNpy(makeNpy('|u1', [1048577, ...Array(63).fill(1)], [], true))).toThrow(
+      /Fortran-order array requires too much work/
+    );
   });
 
   it('round-trips the numpy-written sample fixture', () => {
     const { dims, descr } = parseNpy(fixture('array.npy'));
     expect(dims).toEqual([120, 180]);
     expect(descr).toBe('<f4');
+  });
+});
+
+describe('array previews', () => {
+  it('shows scalar and empty arrays', async () => {
+    const mount = document.createElement('div');
+    await renderArray(makeNpy('<f4', [], [42]), mount, '.npy');
+    expect(mount.textContent).toContain('Value: 42');
+    await renderArray(makeNpy('<f4', [0, 2], []), mount, '.npy');
+    expect(mount.textContent).toContain('Empty array.');
+  });
+
+  it('shows the selected slice of a multidimensional array', async () => {
+    const canvas = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }),
+      putImageData: () => {},
+    });
+    try {
+      const mount = document.createElement('div');
+      const values = Array.from({ length: 16 }, (_, i) => i);
+      await renderArray(makeNpy('<f4', [2, 2, 2, 2], values), mount, '.npy');
+      const inputs = mount.querySelectorAll('input');
+      [...mount.querySelectorAll('button')]
+        .find((button) => button.textContent === 'Numbers')
+        .click();
+      inputs[0].value = '1';
+      inputs[1].value = '1';
+      inputs[1].dispatchEvent(new Event('change'));
+      const buttons = [...mount.querySelectorAll('button')];
+      expect(
+        buttons.find((button) => button.textContent === 'Numbers').classList.contains('on')
+      ).toBe(true);
+      expect(mount.querySelector('tbody').textContent).toContain('1213');
+      expect(mount.querySelector('tbody').textContent).toContain('1415');
+    } finally {
+      canvas.mockRestore();
+    }
+  });
+
+  it('shows exact 64-bit integer values in the numbers view', async () => {
+    const canvas = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }),
+      putImageData: () => {},
+    });
+    try {
+      const mount = document.createElement('div');
+      await renderArray(makeNpy('<u8', [1], [18446744073709551615n]), mount, '.npy');
+      expect(mount.querySelector('tbody').textContent).toContain('18446744073709551615');
+      expect(mount.querySelector('.ov-arr-meta').textContent).toContain('18446744073709551615');
+    } finally {
+      canvas.mockRestore();
+    }
   });
 });
 
