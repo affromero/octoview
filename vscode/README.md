@@ -18,13 +18,21 @@ patterns follow VS Code's normal editor resolution rules.
 For example, this setting opens Parquet and NumPy files directly in Octoview:
 
 ```json
-"octoview.autoPreviewFileTypes": [".parquet", ".npy"]
+"octoview.autoPreviewFileTypes": [".parquet", ".npy", ".npz"]
 ```
 
 Supported extensions: `.html`, `.htm`, `.ipynb`, `.glb`, `.gltf`, `.obj`, `.ply`,
 `.pcd`, `.npy`, `.npz`, `.parquet`, `.arrow`, `.feather`, `.ipc`, `.safetensors`,
 `.gguf`, `.onnx`, `.exr`, `.hdr`, `.tif`, `.tiff`, `.splat`, `.spz`, `.ksplat`,
 `.sog` and `.lcc`.
+
+NumPy previews support numeric and boolean arrays, including float16. RGB and
+RGBA arrays display as images; other arrays with three or more dimensions can
+be browsed as two-dimensional slices. Complex, string, object and structured
+dtypes are unsupported. The numbers view preserves 64-bit integer values; image
+colors are approximate for integers outside JavaScript's exact numeric range.
+Table previews show up to 200 rows and 100 columns and report the full size.
+Parquet previews also limit the selected fields to 100 leaf columns.
 
 LCC needs `index.bin` and `data.bin` beside the metadata file. glTF assets must
 be self-contained. Reports and notebook HTML outputs show static content in

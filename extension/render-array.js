@@ -27,6 +27,7 @@ export function colormap(t) {
 }
 
 const DTYPE = {
+  f2: [null, 2],
   f8: [Float64Array, 8],
   f4: [Float32Array, 4],
   i8: [BigInt64Array, 8],
@@ -50,6 +51,8 @@ const TNAME = {
   Uint8Array: 'Uint8',
 };
 const MAX_DIM = 2000; // cap the rendered canvas; larger arrays are stride-downsampled
+const MAX_HALF_ELEMENTS = 16 * 1024 * 1024;
+const MAX_FORTRAN_WORK = 64 * 1024 * 1024;
 
 // Parse one .npy buffer -> { dims, descr, data } (data is an array-like, row-major).
 export function parseNpy(buf) {
@@ -70,30 +73,53 @@ export function parseNpy(buf) {
     .filter(Boolean)
     .map(Number);
 
+  if (dims.length > 64 || dims.some((dim) => !Number.isSafeInteger(dim) || dim < 0)) {
+    throw new Error('invalid array shape');
+  }
+
   const endian = descr[0];
   const spec = DTYPE[descr.slice(1)];
   if (!spec) throw new Error('unsupported dtype ' + descr);
   const [Arr, size] = spec;
   const count = dims.reduce((a, d) => a * d, 1) || 0;
   const dataStart = hstart + hlen;
-  if (dataStart + count * size > buf.byteLength) throw new Error('.npy data is truncated');
+  if (descr.slice(1) === 'f2' && count > MAX_HALF_ELEMENTS)
+    throw new Error('float16 array is too large to preview');
+  if (fortran && count * dims.length > MAX_FORTRAN_WORK)
+    throw new Error('Fortran-order array requires too much work to preview');
+  if (!Number.isSafeInteger(count) || dataStart + count * size > buf.byteLength)
+    throw new Error('.npy data is truncated or shape is too large');
 
   const little = endian !== '>';
   const is64 = Arr === BigInt64Array || Arr === BigUint64Array;
+  const isHalf = descr.slice(1) === 'f2';
   let data;
-  if (little && !is64) {
+  if (little && !is64 && !isHalf) {
     // Fast path: view the bytes as the native typed array (slice guarantees
     // alignment). Avoids a per-element DataView loop on large arrays.
     data = new Arr(buf.slice(dataStart, dataStart + count * size));
   } else {
-    data = new Float64Array(count);
+    data = isHalf ? new Float32Array(count) : is64 ? new Arr(count) : new Float64Array(count);
     const getBig = Arr === BigInt64Array ? 'getBigInt64' : 'getBigUint64';
     for (let i = 0; i < count; i++) {
       const o = dataStart + i * size;
-      data[i] = is64 ? Number(dv[getBig](o, little)) : dv['get' + TNAME[Arr.name]](o, little);
+      data[i] = isHalf
+        ? halfFloat(dv.getUint16(o, little))
+        : is64
+          ? dv[getBig](o, little)
+          : dv['get' + TNAME[Arr.name]](o, little);
     }
   }
   return { dims, descr, data: fortran && dims.length > 1 ? fortranToC(data, dims) : data };
+}
+
+function halfFloat(bits) {
+  const sign = bits & 0x8000 ? -1 : 1;
+  const exponent = (bits >> 10) & 31;
+  const fraction = bits & 1023;
+  if (exponent === 31) return fraction ? NaN : sign * Infinity;
+  if (exponent === 0) return sign * 2 ** -14 * (fraction / 1024);
+  return sign * 2 ** (exponent - 15) * (1 + fraction / 1024);
 }
 
 // Reorder column-major (Fortran) data to row-major (C) for any dimensionality.
@@ -150,7 +176,7 @@ function drawArray(a, mount, showName) {
   let hi = -Infinity;
   for (let i = 0; i < data.length; i++) {
     const v = data[i];
-    if (isFinite(v)) {
+    if (typeof v === 'bigint' || Number.isFinite(v)) {
       if (v < lo) lo = v;
       if (v > hi) hi = v;
     }
@@ -166,31 +192,92 @@ function drawArray(a, mount, showName) {
     `shape (${dims.join(', ')})  ·  ${descr}  ·  min ${fmt(lo)}  max ${fmt(hi)}`;
   mount.appendChild(meta);
 
-  // 1D/2D/3D get an image + a raw-numbers view; 4D+ is not previewable yet.
-  if (dims.length > 3) {
+  if (!data.length) {
     const p = document.createElement('p');
     p.className = 'ov-msg';
-    p.textContent = `${dims.length}-D array. Preview supports 1D, 2D and 3D (H×W×C).`;
+    p.textContent = 'Empty array.';
     mount.appendChild(p);
     return;
   }
 
+  if (!dims.length) {
+    const p = document.createElement('p');
+    p.textContent = `Value: ${fmt(data[0])}`;
+    mount.appendChild(p);
+    return;
+  }
+
+  const rgb = dims.length === 3 && (dims[2] === 3 || dims[2] === 4);
+  if (dims.length > 2 && !rgb) {
+    drawSlices(a, mount, lo, hi);
+    return;
+  }
+
+  drawViews(dims, descr, data, lo, hi, mount);
+}
+
+function drawSlices({ dims, descr, data }, mount, lo, hi) {
+  const leading = dims.slice(0, -2);
+  const shape = dims.slice(-2);
+  const controls = document.createElement('div');
+  const views = document.createElement('div');
+  const state = { selected: 'image' };
+  const inputs = leading.map((size, axis) => {
+    const label = document.createElement('label');
+    label.textContent = `Axis ${axis} index (0–${size - 1}): `;
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.min = '0';
+    input.max = String(size - 1);
+    input.value = '0';
+    label.appendChild(input);
+    controls.appendChild(label);
+    return input;
+  });
+  const update = () => {
+    let index = 0;
+    for (let i = 0; i < inputs.length; i++) {
+      const value = Number(inputs[i].value);
+      if (inputs[i].value === '' || !Number.isInteger(value) || value < 0 || value >= leading[i]) {
+        views.textContent = 'Choose a valid index for each axis.';
+        return;
+      }
+      index = index * leading[i] + value;
+    }
+    const count = shape[0] * shape[1];
+    const slice = data.subarray(index * count, (index + 1) * count);
+    views.replaceChildren();
+    drawViews(shape, descr, slice, lo, hi, views, state);
+  };
+  inputs.forEach((input) => input.addEventListener('change', update));
+  mount.append(controls, views);
+  update();
+}
+
+function drawViews(dims, descr, data, lo, hi, mount, state = { selected: 'image' }) {
   const image = buildImage(dims, descr, data, lo, hi);
   const numbers = buildNumbers(dims, data);
-  numbers.style.display = 'none';
+  image.style.display = state.selected === 'image' ? '' : 'none';
+  numbers.style.display = state.selected === 'numbers' ? '' : 'none';
 
   const tabs = document.createElement('div');
   tabs.className = 'ov-arr-tabs';
-  const bImg = tab('Image', true);
-  const bNum = tab('Numbers', false);
+  const bImg = tab('Image', state.selected === 'image');
+  const bNum = tab('Numbers', state.selected === 'numbers');
   const show = (on, onBtn, off, offBtn) => {
     on.style.display = '';
     off.style.display = 'none';
     onBtn.classList.add('on');
     offBtn.classList.remove('on');
   };
-  bImg.onclick = () => show(image, bImg, numbers, bNum);
-  bNum.onclick = () => show(numbers, bNum, image, bImg);
+  bImg.onclick = () => {
+    state.selected = 'image';
+    show(image, bImg, numbers, bNum);
+  };
+  bNum.onclick = () => {
+    state.selected = 'numbers';
+    show(numbers, bNum, image, bImg);
+  };
   tabs.append(bImg, bNum);
   mount.append(tabs, image, numbers);
 }
@@ -216,7 +303,8 @@ function buildImage(dims, descr, data, lo, hi) {
   canvas.height = h;
   const ctx = canvas.getContext('2d');
   const img = ctx.createImageData(w, h);
-  const span = hi - lo || 1;
+  const low = Number(lo);
+  const span = Number(hi) - low || 1;
   const c = isRGB ? dims[2] : 1;
   const floatRGB = isRGB && (descr.includes('f') || hi <= 1.01);
 
@@ -227,12 +315,12 @@ function buildImage(dims, descr, data, lo, hi) {
       if (isRGB) {
         const base = src * c;
         const s = floatRGB ? 255 : 1;
-        img.data[o] = data[base] * s;
-        img.data[o + 1] = data[base + 1] * s;
-        img.data[o + 2] = data[base + 2] * s;
-        img.data[o + 3] = c === 4 ? data[base + 3] * s : 255;
+        img.data[o] = Number(data[base]) * s;
+        img.data[o + 1] = Number(data[base + 1]) * s;
+        img.data[o + 2] = Number(data[base + 2]) * s;
+        img.data[o + 3] = c === 4 ? Number(data[base + 3]) * s : 255;
       } else {
-        const [r, g, bl] = colormap((data[src] - lo) / span);
+        const [r, g, bl] = colormap((Number(data[src]) - low) / span);
         img.data[o] = r;
         img.data[o + 1] = g;
         img.data[o + 2] = bl;
@@ -289,6 +377,7 @@ function buildNumbers(dims, data) {
 }
 
 function fmt(v) {
+  if (typeof v === 'bigint') return v.toString();
   if (!isFinite(v)) return String(v);
   return Math.abs(v) >= 1000 || (Math.abs(v) < 0.001 && v !== 0)
     ? v.toExponential(2)
